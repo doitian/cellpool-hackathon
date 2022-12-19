@@ -27,6 +27,8 @@ Use the contract as lock script.
 #[derive(Clone, Debug, PartialEq, CanonicalSerialize, CanonicalDeserialize)]
 pub struct CellPoolWitness {
     pub proof: Proof<Bls12_381>,
-    pub transactions: ??
+    // Every transaction is the result of Transaction::to_bytes_le
+    // See https://github.com/contrun/cellpool-proofs/blob/d870af409f8baa1f5eb7aa3ba2366ec41c411a43/src/transaction/mod.rs#L34
+    pub transactions: Vec<Vec<u8>>,
 }
 ```
