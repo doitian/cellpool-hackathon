@@ -2,6 +2,7 @@ use crate::account::{sentinel_account, AccountInformationVar, AccountPublicKeyVa
 use crate::random_oracle::blake2s::constraints::ROGadget;
 use crate::random_oracle::blake2s::RO;
 use crate::random_oracle::constraints::RandomOracleGadget;
+use crate::serde::{BigUintAsHex, SerdeAsBase64, SerdeAsHex};
 use crate::signature::{Signature, SignatureVar};
 use crate::transaction::{get_transactions_hash, Transaction, TransactionVar};
 use crate::ConstraintF;
@@ -12,32 +13,45 @@ use crate::{
 use crate::{ledger::*, SignedTransaction};
 use ark_r1cs_std::prelude::*;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
+use serde::{Deserialize, Serialize, Serializer};
+use serde_with::serde_as;
 
+#[serde_as]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Rollup {
     /// The ledger parameters.
+    #[serde(skip)]
     pub ledger_params: Parameters,
     /// The Merkle tree root before applying this batch of transactions.
+    #[serde_as(as = "SerdeAsHex")]
     pub initial_root: Option<AccRoot>,
     /// The Merkle tree root after applying this batch of transactions.
+    #[serde_as(as = "SerdeAsHex")]
     pub final_root: Option<AccRoot>,
     /// The current batch of transactions.
+    #[serde_as(as = "SerdeAsHex")]
     pub transactions: Option<Vec<Transaction>>,
     /// The current batch of transactions.
     pub signatures: Option<Vec<Signature>>,
     /// The sender's account information and corresponding authentication path,
     /// *before* applying the transactions.
+    #[serde_as(as = "SerdeAsHex")]
     pub sender_pre_tx_info_and_paths: Option<Vec<(AccountInformation, AccPath)>>,
     /// The authentication path corresponding to the sender's account information
     /// *after* applying the transactions.
+    #[serde_as(as = "SerdeAsHex")]
     pub sender_post_paths: Option<Vec<AccPath>>,
     /// The recipient's account information and corresponding authentication path,
     /// *before* applying the transactions.
+    #[serde_as(as = "SerdeAsHex")]
     pub recv_pre_tx_info_and_paths: Option<Vec<(AccountInformation, AccPath)>>,
     /// The authentication path corresponding to the recipient's account information
     /// *after* applying the transactions.
+    #[serde_as(as = "SerdeAsHex")]
     pub recv_post_paths: Option<Vec<AccPath>>,
     /// List of state roots, so that the i-th root is the state root after applying
     /// the i-th transaction. This means that `post_tx_roots[NUM_TX - 1] == final_root`.
+    #[serde_as(as = "SerdeAsHex")]
     pub post_tx_roots: Option<Vec<AccRoot>>,
 }
 
@@ -456,7 +470,10 @@ mod test {
         let mut temp_state = state.clone();
         let tx1 = SignedTransaction::mint(alice_pk, Amount(5));
         assert!(tx1.validate(&temp_state, true));
-        let rollup = temp_state.rollup_transactions_mut(&[tx1], true).unwrap();
+        let rollup = temp_state
+            .rollup_transactions_mut(&[tx1.clone()], true)
+            .unwrap();
+        println!("{}", serde_json::to_string_pretty(&tx1).unwrap());
         assert!(test_cs(rollup));
     }
 

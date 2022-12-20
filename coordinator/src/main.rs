@@ -1,5 +1,7 @@
 use actix_web::web::Json;
-use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{error, get, post, web, App, HttpResponse, HttpServer, Responder};
+use cellpool_proofs::ledger::StateError;
+use cellpool_proofs::rollup::Rollup;
 use cellpool_proofs::SignedTransaction;
 use cellpool_proofs::State;
 use std::sync::Mutex;
@@ -30,13 +32,38 @@ async fn uncommitted_transactions_handler(
     Json(uncommitted_transactions)
 }
 
-#[post("/echo")]
-async fn echo(req_body: String) -> impl Responder {
-    HttpResponse::Ok().body(req_body)
+#[post("/create_transaction")]
+async fn create_transaction_handler(
+    data: web::Data<StateData>,
+    transaction: Json<SignedTransaction>,
+) -> Json<Vec<SignedTransaction>> {
+    let mut uncommitted_transactions = data.uncommitted_transactions.lock().unwrap();
+    uncommitted_transactions.push(transaction.clone());
+    let uncommitted_transactions = uncommitted_transactions.clone();
+    Json(uncommitted_transactions)
 }
 
-async fn manual_hello() -> impl Responder {
-    HttpResponse::Ok().body("Hey there!")
+#[get("/rollup")]
+async fn rollup_handler(data: web::Data<StateData>) -> Result<Json<Rollup>, actix_web::Error> {
+    let mut uncommitted_transactions = data.uncommitted_transactions.lock().unwrap();
+    let mut state = data.state.lock().unwrap();
+    let result = state.rollup_transactions_mut(&uncommitted_transactions, false);
+    *uncommitted_transactions = vec![];
+    result
+        .map(Json)
+        .map_err(|err| error::ErrorBadRequest(err.to_string()))
+}
+
+#[post("/rollup_transactions")]
+async fn rollup_transactions_handler(
+    data: web::Data<StateData>,
+    transactions: Json<Vec<SignedTransaction>>,
+) -> Result<Json<Rollup>, actix_web::Error> {
+    let mut state = data.state.lock().unwrap();
+    let result = state.rollup_transactions_mut(&transactions, false);
+    result
+        .map(Json)
+        .map_err(|err| error::ErrorBadRequest(err.to_string()))
 }
 
 #[actix_web::main]
@@ -48,12 +75,12 @@ async fn main() -> std::io::Result<()> {
 
     HttpServer::new(move || {
         App::new()
-            .service(hello)
-            .service(echo)
             .service(state_handler)
             .service(uncommitted_transactions_handler)
+            .service(create_transaction_handler)
+            .service(rollup_transactions_handler)
+            .service(rollup_handler)
             .app_data(app_state.clone()) // <- register the created data
-            .route("/hey", web::get().to(manual_hello))
     })
     .bind(("127.0.0.1", 5060))?
     .run()

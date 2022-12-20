@@ -61,7 +61,7 @@ impl Amount {
 }
 
 /// The parameters that are used in transaction creation and validation.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Parameters {
     pub sig_params: schnorr::Parameters<EdwardsProjective>,
     pub leaf_crh_params: <TwoToOneHash as CRH>::Parameters,
