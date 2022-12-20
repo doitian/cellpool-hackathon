@@ -1,3 +1,4 @@
+use actix_web::web::Json;
 use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
 use cellpool_proofs::State;
 use std::sync::Mutex;
@@ -12,10 +13,10 @@ struct AppState {
 }
 
 #[get("/dump")]
-async fn index(data: web::Data<AppState>) -> String {
-    let state = data.state.lock().unwrap(); // <- get counter's MutexGuard
-
-    format!("Request number: {state:?}") // <- response with count
+async fn index(data: web::Data<AppState>) -> Json<State> {
+    let state = data.state.lock().unwrap();
+    let state = state.clone();
+    Json(state)
 }
 
 #[post("/echo")]
@@ -30,7 +31,7 @@ async fn manual_hello() -> impl Responder {
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let state = web::Data::new(AppState {
-        state: Mutex::new(State::new(32)),
+        state: Mutex::new(State::new()),
     });
 
     HttpServer::new(move || {

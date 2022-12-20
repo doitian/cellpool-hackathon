@@ -188,7 +188,7 @@ impl From<&State> for WiredState {
 impl TryFrom<&WiredState> for State {
     type Error = StateError;
     fn try_from(ws: &WiredState) -> Result<State, Self::Error> {
-        State::import_from_account_information(&ws.accounts)
+        State::import_from_account_information(ws.num_of_accounts, &ws.accounts)
     }
 }
 
@@ -213,9 +213,13 @@ impl State {
         Self::new_with_parameters(&parameters)
     }
 
+    pub fn new_with_num_of_accounts(num_accounts: usize) -> Self {
+        let parameters = Parameters::unsecure_hardcoded_parameters();
+        Self::new_blank_state(num_accounts, &parameters)
+    }
+
     /// Create an empty ledger that supports `num_accounts` accounts.
-    pub fn new_blank_state(parameters: &Parameters) -> Self {
-        let num_accounts = DEFUALT_NUM_OF_ACCOUNTS;
+    pub fn new_blank_state(num_accounts: usize, parameters: &Parameters) -> Self {
         let height = ark_std::log2(num_accounts);
         let account_merkle_tree = MerkleTree::blank(
             &parameters.leaf_crh_params,
@@ -239,7 +243,7 @@ impl State {
 
     /// Create an empty ledger that supports `num_accounts` accounts.
     pub fn new_with_parameters(parameters: &Parameters) -> Self {
-        let mut state = Self::new_blank_state(parameters);
+        let mut state = Self::new_blank_state(DEFUALT_NUM_OF_ACCOUNTS, parameters);
 
         state.register(sentinel_account());
         // TODO: fix this.
@@ -280,10 +284,11 @@ impl State {
     }
 
     pub fn import_from_account_information(
+        num_accounts: usize,
         account_information: &[AccountInformation],
     ) -> Result<Self, StateError> {
         let parameters = Parameters::unsecure_hardcoded_parameters();
-        let mut state = Self::new_blank_state(&parameters);
+        let mut state = Self::new_blank_state(num_accounts, &parameters);
         for info in account_information {
             state.add_account_information(*info)?
         }
