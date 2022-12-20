@@ -1,4 +1,5 @@
 use crate::rollup::Rollup;
+use crate::Transaction;
 
 use super::account::{AccountId, AccountInformation, AccountPublicKey, AccountSecretKey};
 use super::signature::{schnorr, SignatureScheme};
@@ -12,6 +13,7 @@ use ark_ed_on_bls12_381::EdwardsProjective;
 use ark_serialize::*;
 use ark_std::rand::Rng;
 use std::collections::HashMap;
+use thiserror::Error;
 
 #[cfg(feature = "r1cs")]
 pub mod constraints;
@@ -119,8 +121,22 @@ pub struct State {
     pub pub_key_to_id: HashMap<schnorr::PublicKey<EdwardsProjective>, AccountId>,
     /// Parameters used for signature verification.
     pub parameters: Parameters,
-    /// Acccount Merkle tree history, used to track which batch of trasactions are applied.
-    pub merkle_tree_history: Vec<AccMerkleTree>,
+    /// Acccount Merkle tree.
+    pub merkle_tree: AccMerkleTree,
+    /// Acccount Merkle tree root history, used to track which batch of transactions are applied.
+    pub merkle_root_history: Vec<AccRoot>,
+}
+
+#[derive(Error, Debug)]
+pub enum StateError {
+    #[error("Unexpected state fork")]
+    Fork,
+    #[error("Invalid state root: {0} expected, {1} found")]
+    InvalidTip(AccRoot, AccRoot),
+    #[error("Trying to apply invalid transaction: {0:?}")]
+    InvalidTransaction(SignedTransaction),
+    #[error("Account not found: {0}")]
+    AccountNotFound(AccountPublicKey),
 }
 
 impl State {
@@ -141,27 +157,25 @@ impl State {
         .unwrap();
         let pub_key_to_id = HashMap::with_capacity(num_accounts);
         let id_to_account_info = HashMap::with_capacity(num_accounts);
+        let merkle_root: AccRoot = account_merkle_tree.root();
         Self {
             next_available_account: Some(AccountId(1)),
             id_to_account_info,
             pub_key_to_id,
             parameters: parameters.clone(),
-            merkle_tree_history: vec![account_merkle_tree],
+            merkle_tree: account_merkle_tree,
+            merkle_root_history: vec![merkle_root],
         }
     }
 
     /// Return the root of the account Merkle tree.
     pub fn current_merkle_tree(&self) -> &AccMerkleTree {
-        self.merkle_tree_history
-            .last()
-            .expect("Merkle tree history will be non-empty upon state creation")
+        &self.merkle_tree
     }
 
     /// Return the root of the account Merkle tree.
     pub(crate) fn current_merkle_tree_mut(&mut self) -> &mut AccMerkleTree {
-        self.merkle_tree_history
-            .last_mut()
-            .expect("Merkle tree history will be non-empty upon state creation")
+        &mut self.merkle_tree
     }
 
     /// Return the root of the account Merkle tree.
@@ -287,11 +301,31 @@ impl State {
         true
     }
 
+    pub fn catchup_transactions(
+        &mut self,
+        transactions: &[Transaction],
+        old_root: AccRoot,
+        new_root: AccRoot,
+    ) -> Result<(), StateError> {
+        if self.current_root() != old_root {
+            return Err(StateError::InvalidTip(old_root, self.current_root()));
+        }
+        let transactions: Vec<SignedTransaction> = transactions.iter().map(Into::into).collect();
+        let (mut temp_state, _) = self.rollup_transactions(&transactions, false)?;
+        let calculated_root = temp_state.current_root();
+        if calculated_root != new_root {
+            return Err(StateError::InvalidTip(calculated_root, new_root));
+        }
+        temp_state.merkle_root_history.push(new_root);
+        *self = temp_state;
+        Ok(())
+    }
+
     pub fn rollup_transactions(
         &self,
         transactions: &[SignedTransaction],
         create_non_existent_accounts: bool,
-    ) -> Option<(Self, Rollup)> {
+    ) -> Result<(Self, Rollup), StateError> {
         self.do_rollup_transactions(transactions, create_non_existent_accounts, true)
     }
 
@@ -300,7 +334,7 @@ impl State {
         transactions: &[SignedTransaction],
         _create_non_existent_accounts: bool,
         validate_transactions: bool, // When set, only generating a not working rollup, useful for testing.
-    ) -> Option<(Self, Rollup)> {
+    ) -> Result<(Self, Rollup), StateError> {
         let mut temp_state = self.clone();
         let num_tx = transactions.len();
         let initial_root = Some(temp_state.current_root());
@@ -313,20 +347,23 @@ impl State {
         for tx in transactions {
             let sender_id = tx.sender();
             let recipient_id = tx.recipient();
-            let sender_pre_acc_info = temp_state.get_account_information_from_pk(&sender_id)?;
+            let sender_pre_acc_info = temp_state
+                .get_account_information_from_pk(&sender_id)
+                .ok_or(StateError::AccountNotFound(sender_id))?;
             let sender_pre_path = temp_state
                 .current_merkle_tree()
                 .generate_proof(sender_pre_acc_info.id.0 as usize)
                 .expect("Already validated transaction above");
-            let recipient_pre_acc_info =
-                temp_state.get_account_information_from_pk(&recipient_id)?;
+            let recipient_pre_acc_info = temp_state
+                .get_account_information_from_pk(&recipient_id)
+                .ok_or(StateError::AccountNotFound(recipient_id))?;
             let recipient_pre_path = temp_state
                 .current_merkle_tree_mut()
                 .generate_proof(recipient_pre_acc_info.id.0 as usize)
                 .expect("Already validated transaction above");
 
             if validate_transactions && !temp_state.apply_transaction(tx) {
-                return None;
+                return Err(StateError::InvalidTransaction(tx.clone()));
             }
 
             let post_tx_root = temp_state.current_root();
@@ -345,10 +382,11 @@ impl State {
             post_tx_roots.push(post_tx_root);
         }
 
+        let final_root = temp_state.current_root();
         let rollup = Rollup {
             ledger_params,
             initial_root,
-            final_root: Some(temp_state.current_root()),
+            final_root: Some(final_root),
             transactions: Some(transactions.iter().map(Into::into).collect()),
             signatures: Some(transactions.iter().map(|s| s.signature.clone()).collect()),
             sender_pre_tx_info_and_paths: Some(sender_pre_tx_info_and_paths),
@@ -357,18 +395,19 @@ impl State {
             recv_post_paths: Some(recipient_post_paths),
             post_tx_roots: Some(post_tx_roots),
         };
-        Some((temp_state, rollup))
+        temp_state.merkle_root_history.push(final_root);
+        Ok((temp_state, rollup))
     }
 
     pub fn rollup_transactions_mut(
         &mut self,
         transactions: &[SignedTransaction],
         create_non_existent_accounts: bool,
-    ) -> Option<Rollup> {
+    ) -> Result<Rollup, StateError> {
         let (temp_state, rollup) =
             self.rollup_transactions(transactions, create_non_existent_accounts)?;
         *self = temp_state;
-        Some(rollup)
+        Ok(rollup)
     }
 }
 

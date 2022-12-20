@@ -1,4 +1,4 @@
-use crate::ledger::{AccRoot, State};
+use crate::ledger::{AccRoot, State, StateError};
 
 use crate::transaction::{get_transactions_hash, SignedTransaction, Transaction};
 use crate::ConstraintF;
@@ -16,8 +16,8 @@ pub struct Proof {
 
 #[derive(Error, Debug)]
 pub enum ProofError {
-    #[error("Unable to rollup transactions")]
-    Rollup,
+    #[error("Unable to rollup transactions: {0}")]
+    Rollup(StateError),
     #[error("Underlying proving engine error: {0}")]
     ProvingEngine(ark_relations::r1cs::SynthesisError),
 }
@@ -28,7 +28,7 @@ pub fn rollup_and_prove(
 ) -> Result<Proof, ProofError> {
     let rollup = state
         .rollup_transactions_mut(transactions, true)
-        .ok_or(ProofError::Rollup)?;
+        .map_err(ProofError::Rollup)?;
 
     let mut rng = ark_std::test_rng();
     let (pk, vk) = Groth16::<Bls12_381>::circuit_specific_setup(&rollup, &mut rng)

@@ -83,6 +83,21 @@ impl From<&SignedTransaction> for Transaction {
     }
 }
 
+impl From<Transaction> for SignedTransaction {
+    fn from(transaction: Transaction) -> SignedTransaction {
+        (&transaction).into()
+    }
+}
+
+impl From<&Transaction> for SignedTransaction {
+    fn from(transaction: &Transaction) -> SignedTransaction {
+        SignedTransaction {
+            transaction: *transaction,
+            signature: Signature::default(),
+        }
+    }
+}
+
 impl SignedTransaction {
     pub fn sender(&self) -> AccountPublicKey {
         self.transaction.sender
