@@ -100,7 +100,14 @@ fn test_success() {
 
     let outputs_data = vec![Bytes::from(serialized_bytes)];
 
-    let witness = WitnessArgsBuilder::default().build();
+    let lock_witness = vec![0];
+    let witness = WitnessArgsBuilder::default()
+        .lock(
+            BytesOptBuilder::default()
+                .set(Some(lock_witness.pack()))
+                .build(),
+        )
+        .build();
 
     // build transaction
     let tx = TransactionBuilder::default()

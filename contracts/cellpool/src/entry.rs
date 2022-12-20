@@ -54,9 +54,16 @@ pub fn main() -> Result<(), Error> {
     let vk = VerifyingKey::deserialize_uncompressed(&*args).unwrap();
 
     // 2. Setup inputs from input / output cell data and witness
-    let initial_root = load_cell_data(0, Source::GroupInput)?;
-    let final_root = load_final_root(&script)?;
-    let witness_args = load_witness_args(0, Source::Input).unwrap();
+    let initial_root_bytes = load_cell_data(0, Source::GroupInput)?;
+    // TODO: deserialize AccRoot from initial_root_bytes
+    let final_root_bytes = load_final_root(&script)?;
+    // TODO: deserialize AccRoot from final_root_bytes
+    let lock_witness = load_witness_args(0, Source::Input)
+        .unwrap()
+        .lock()
+        .to_opt()
+        .unwrap();
+    // TODO: deserialize arc_std::vec::Vec<SignedTransaction> and Proof from lock_witness
 
     // 3. Run Groth16 to verify
 
