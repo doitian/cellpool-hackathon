@@ -2,8 +2,7 @@ use base64::{decode, encode};
 use hex::{FromHex, ToHex};
 
 use ark_serialize::*;
-use serde::{Deserialize, Serialize, Serializer};
-use serde_with::{DeserializeAs, SerializeAs};
+use serde::Deserialize;
 
 pub struct SerdeAsBytes;
 

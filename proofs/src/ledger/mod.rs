@@ -15,7 +15,7 @@ use ark_ed_on_bls12_381::EdwardsProjective;
 use ark_serialize::*;
 use ark_std::rand::Rng;
 use derivative::Derivative;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use serde_with::serde_as;
 use std::collections::HashMap;
 use thiserror::Error;
@@ -144,6 +144,25 @@ pub struct State {
 
 const DEFUALT_NUM_OF_ACCOUNTS: usize = 256;
 
+impl Serialize for State {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        WiredState::from(self).serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for State {
+    fn deserialize<D>(deserializer: D) -> Result<State, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let ws = <WiredState as Deserialize>::deserialize(deserializer)?;
+        TryFrom::try_from(&ws).map_err(serde::de::Error::custom)
+    }
+}
+
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WiredState {
@@ -151,6 +170,26 @@ pub struct WiredState {
     pub merkle_tree_root: AccRoot,
     pub num_of_accounts: usize,
     pub accounts: Vec<AccountInformation>,
+}
+
+impl From<&State> for WiredState {
+    fn from(state: &State) -> WiredState {
+        let accounts = state.export_to_account_information();
+        let num_of_accounts = state.num_of_accounts;
+        let merkle_tree_root = state.current_root();
+        WiredState {
+            merkle_tree_root,
+            num_of_accounts,
+            accounts,
+        }
+    }
+}
+
+impl TryFrom<&WiredState> for State {
+    type Error = StateError;
+    fn try_from(ws: &WiredState) -> Result<State, Self::Error> {
+        State::import_from_account_information(&ws.accounts)
+    }
 }
 
 #[derive(Error, Debug)]
@@ -241,7 +280,6 @@ impl State {
     }
 
     pub fn import_from_account_information(
-        &self,
         account_information: &[AccountInformation],
     ) -> Result<Self, StateError> {
         let parameters = Parameters::unsecure_hardcoded_parameters();
