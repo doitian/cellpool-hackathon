@@ -480,7 +480,7 @@ mod test {
 
         let bad_tx: SignedTransaction =
             Transaction::new(alice_pk, sentinel_account(), Amount(5)).into();
-        let rollup = Rollup::with_state_and_transactions(&temp_state, &[bad_tx.clone()]);
+        let rollup = Rollup::with_state_and_transactions(&temp_state, &[bad_tx]);
         assert!(!test_cs(rollup));
     }
 }

@@ -1,5 +1,6 @@
 use crate::account::sentinel_account;
 use crate::rollup::Rollup;
+use crate::serde::SerdeAsHex;
 use crate::Transaction;
 
 use super::account::{AccountId, AccountInformation, AccountPublicKey, AccountSecretKey};
@@ -14,8 +15,9 @@ use ark_ed_on_bls12_381::EdwardsProjective;
 use ark_serialize::*;
 use ark_std::rand::Rng;
 use derivative::Derivative;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use std::collections::HashMap;
-use std::num;
 use thiserror::Error;
 
 #[cfg(feature = "r1cs")]
@@ -35,6 +37,8 @@ pub use constraints::*;
     Debug,
     CanonicalSerialize,
     CanonicalDeserialize,
+    Serialize,
+    Deserialize,
 )]
 pub struct Amount(pub u64);
 
@@ -134,9 +138,20 @@ pub struct State {
     pub merkle_tree: AccMerkleTree,
     /// Acccount Merkle tree root history, used to track which batch of transactions are applied.
     pub merkle_root_history: Vec<AccRoot>,
+    /// Number of accounts that is contained in Merkle tree.
+    pub num_of_accounts: usize,
 }
 
 const DEFUALT_NUM_OF_ACCOUNTS: usize = 256;
+
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WiredState {
+    #[serde_as(as = "SerdeAsHex")]
+    pub merkle_tree_root: AccRoot,
+    pub num_of_accounts: usize,
+    pub accounts: Vec<AccountInformation>,
+}
 
 #[derive(Error, Debug)]
 pub enum StateError {
@@ -148,6 +163,8 @@ pub enum StateError {
     InvalidTransaction(SignedTransaction),
     #[error("Account not found: {0}")]
     AccountNotFound(AccountPublicKey),
+    #[error("Account id {0:?} already existed")]
+    Existed(AccountId),
 }
 
 impl State {
@@ -177,6 +194,7 @@ impl State {
             parameters: parameters.clone(),
             merkle_tree: account_merkle_tree,
             merkle_root_history: vec![merkle_root],
+            num_of_accounts: num_accounts,
         }
     }
 
@@ -198,6 +216,40 @@ impl State {
             )
             .expect("Sentinel account is created above");
         state
+    }
+
+    pub fn add_account_information(
+        &mut self,
+        account_info: AccountInformation,
+    ) -> Result<(), StateError> {
+        // TODO: check account limit here.
+        let id = account_info.id;
+        if self.id_to_account_info.contains_key(&id) {
+            return Err(StateError::Existed(id));
+        };
+
+        self.id_to_account_info.insert(id, account_info);
+        let next_id = self.next_available_account.expect("State initialized");
+        if next_id <= id {
+            self.next_available_account = Some(AccountId(id.0 + 1))
+        }
+        Ok(())
+    }
+
+    pub fn export_to_account_information(&self) -> Vec<AccountInformation> {
+        self.id_to_account_info.iter().map(|(_k, v)| *v).collect()
+    }
+
+    pub fn import_from_account_information(
+        &self,
+        account_information: &[AccountInformation],
+    ) -> Result<Self, StateError> {
+        let parameters = Parameters::unsecure_hardcoded_parameters();
+        let mut state = Self::new_blank_state(&parameters);
+        for info in account_information {
+            state.add_account_information(*info)?
+        }
+        Ok(state)
     }
 
     /// Return the root of the account Merkle tree.

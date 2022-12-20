@@ -27,6 +27,9 @@ derivative = { version = "2.0", features = ["use_core"] }
 anyhow = { version = "1.0.68", default-features = false }
 thiserror = { version = "1.0.38", default-features = false }
 serde = { version = "1.0.151", default-features = false, features = ["serde_derive", "derive"] }
+base64 = { version = "0.20.0" }
+serde_with = { version = "2.1.0" }
+hex = { version = "0.4.3" }
 
 [features]
 default = [ "std", "parallel", "r1cs" ]

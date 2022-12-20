@@ -1,6 +1,10 @@
 use super::ledger::*;
 use super::signature::schnorr;
 
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
+
+use crate::serde::SerdeAsHex;
 use ark_ed_on_bls12_381::EdwardsProjective;
 use ark_serialize::*;
 
@@ -47,6 +51,8 @@ pub fn non_existent_account() -> AccountPublicKey {
     Debug,
     CanonicalSerialize,
     CanonicalDeserialize,
+    Serialize,
+    Deserialize,
 )]
 pub struct AccountId(pub WrappedAccountId);
 type WrappedAccountId = u16;
@@ -66,11 +72,24 @@ impl AccountId {
 }
 
 /// Information about the account, such as the balance and the associated public key.
-#[derive(Hash, Eq, PartialEq, Copy, Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
+#[serde_as]
+#[derive(
+    Hash,
+    Eq,
+    PartialEq,
+    Copy,
+    Clone,
+    Debug,
+    CanonicalSerialize,
+    CanonicalDeserialize,
+    Serialize,
+    Deserialize,
+)]
 pub struct AccountInformation {
     /// The account public key.
     pub id: AccountId,
     /// The account public key.
+    #[serde_as(as = "SerdeAsHex")]
     pub public_key: AccountPublicKey,
     /// The balance associated with this this account.
     pub balance: Amount,
