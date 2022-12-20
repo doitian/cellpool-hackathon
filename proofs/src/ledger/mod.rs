@@ -277,19 +277,24 @@ impl State {
     pub fn rollup_transactions(
         &self,
         transactions: &[SignedTransaction],
-        validate_transactions: bool,
         create_non_existent_accounts: bool,
     ) -> Option<(Self, Rollup)> {
         let mut temp_state = self.clone();
-        let rollup = temp_state.rollup_transactions_mut(
-            transactions,
-            validate_transactions,
-            create_non_existent_accounts,
-        )?;
+        let rollup =
+            temp_state.rollup_transactions_mut(transactions, create_non_existent_accounts)?;
         Some((temp_state, rollup))
     }
 
     pub fn rollup_transactions_mut(
+        &mut self,
+        transactions: &[SignedTransaction],
+        create_non_existent_accounts: bool,
+    ) -> Option<Rollup> {
+        self.do_rollup_transactions_mut(transactions, true, create_non_existent_accounts)
+    }
+
+    // Expose the validate_transactions parameter for testing.
+    pub(crate) fn do_rollup_transactions_mut(
         &mut self,
         transactions: &[SignedTransaction],
         validate_transactions: bool,
