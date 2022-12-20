@@ -1,0 +1,20 @@
+[workspace]
+members = ["tests", "proofs", "contracts/cellpool"]
+
+[profile.release]
+overflow-checks = true
+opt-level = 's'
+lto = false
+codegen-units = 1
+panic = 'abort'
+
+[profile.dev]
+opt-level = 0
+panic = 'abort'
+
+[profile.test]
+opt-level = 3
+lto = "thin"
+incremental = true
+debug-assertions = true
+debug = true

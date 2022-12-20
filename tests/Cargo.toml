@@ -1,0 +1,18 @@
+[package]
+name = "tests"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+doctest = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ckb-testtool = "0.8"
+cellpool-proofs = { version = "0.1.0", path = "../proofs" }
+ark-bls12-381 = { version = "^0.3.0" }
+ark-std = { version = "^0.3.0", default-features = false }
+ark-snark = { version = "^0.3.0", default-features = false }
+ark-groth16 = { version = "^0.3.0" }
+ark-serialize = { version = "^0.3.0", default-features = false }

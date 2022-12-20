@@ -1,0 +1,14 @@
+[package]
+name = "cellpool"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ckb-std = "0.10.0"
+ark-std = { version = "^0.3.0", default-features = false }
+ark-bls12-381 = { version = "^0.3.0", features = ["curve"] }
+ark-groth16 = { version = "^0.3.0", default-features = false }
+ark-serialize = { version = "^0.3.0", default-features = false }
+ark-snark = { version = "^0.3.0", default-features = false }
