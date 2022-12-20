@@ -12,3 +12,6 @@ ark-bls12-381 = { version = "^0.3.0", features = ["curve"] }
 ark-groth16 = { version = "^0.3.0", default-features = false }
 ark-serialize = { version = "^0.3.0", default-features = false }
 ark-snark = { version = "^0.3.0", default-features = false }
+ark-ed-on-bls12-381 = { version = "^0.3.0", features = ["r1cs"] }
+ark-crypto-primitives = { version = "^0.3.0", default-features = false }
+ark-ec = { version = "^0.3.0", default-features = false }

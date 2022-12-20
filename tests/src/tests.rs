@@ -1,13 +1,13 @@
 use super::*;
 
 use ark_bls12_381::Bls12_381;
-use ark_groth16::Groth16;
+use ark_groth16::{Groth16, Proof};
 use ark_serialize::*;
 use ark_snark::SNARK;
 use cellpool_proofs::{
     ledger::{Amount, Parameters, State},
     rollup::Rollup,
-    transaction::SignedTransaction,
+    transaction::{SignedTransaction, Transaction},
 };
 use ckb_testtool::ckb_error::Error;
 use ckb_testtool::ckb_types::{bytes::Bytes, core::TransactionBuilder, packed::*, prelude::*};
@@ -17,6 +17,12 @@ const MAX_CYCLES: u64 = 3_000_000_000;
 
 // error numbers
 const ERROR_EMPTY_ARGS: i8 = 5;
+
+#[derive(Clone, Debug, PartialEq, CanonicalSerialize, CanonicalDeserialize)]
+pub struct CellPoolWitness {
+    proof: Proof<Bls12_381>,
+    transactions: Vec<Transaction>,
+}
 
 fn assert_script_error(err: Error, err_code: i8) {
     let error_string = err.to_string();
@@ -71,14 +77,39 @@ fn test_success() {
     // Use the same circuit but with different inputs to verify against
     // This test checks that the SNARK passes on the provided input
     let circuit_to_verify_against = build_two_tx_circuit();
-    let (_, vk) =
+    let (pk, vk) =
         Groth16::<Bls12_381>::circuit_specific_setup(&circuit_to_verify_against, &mut rng).unwrap();
-    let mut serialized_bytes = Vec::new();
-    vk.serialize_uncompressed(&mut serialized_bytes).unwrap();
+
+    let proof = Groth16::prove(&pk, &circuit_to_verify_against, &mut rng).unwrap();
+
+    // Serializse data
+    let mut serialized_vk = Vec::new();
+    vk.serialize_uncompressed(&mut serialized_vk).unwrap();
+    let mut serialized_initial_root = Vec::new();
+    circuit_to_verify_against
+        .initial_root
+        .unwrap()
+        .serialize_uncompressed(&mut serialized_initial_root)
+        .unwrap();
+    let mut serialized_final_root = Vec::new();
+    circuit_to_verify_against
+        .final_root
+        .unwrap()
+        .serialize_uncompressed(&mut serialized_final_root)
+        .unwrap();
+
+    let mut serialized_witness = Vec::new();
+    let witness = CellPoolWitness {
+        proof,
+        transactions: circuit_to_verify_against.transactions.clone().unwrap(),
+    };
+    witness
+        .serialize_uncompressed(&mut serialized_witness)
+        .unwrap();
 
     // prepare scripts
     let lock_script = context
-        .build_script(&out_point, Bytes::from(serialized_bytes.clone()))
+        .build_script(&out_point, Bytes::from(serialized_vk))
         .expect("script");
     let lock_script_dep = CellDep::new_builder().out_point(out_point).build();
 
@@ -88,7 +119,7 @@ fn test_success() {
             .capacity(1000u64.pack())
             .lock(lock_script.clone())
             .build(),
-        Bytes::new(),
+        Bytes::from(serialized_initial_root),
     );
     let input = CellInput::new_builder()
         .previous_output(input_out_point)
@@ -98,21 +129,18 @@ fn test_success() {
         .lock(lock_script.clone())
         .build()];
 
-    let outputs_data = vec![Bytes::from(serialized_bytes)];
+    let outputs_data = vec![Bytes::from(serialized_final_root)];
 
-    let lock_witness = vec![0];
-    let witness = WitnessArgsBuilder::default()
-        .lock(
-            BytesOptBuilder::default()
-                .set(Some(lock_witness.pack()))
-                .build(),
-        )
+    let witness_args = WitnessArgsBuilder::default()
+        .lock(Some(Bytes::from(serialized_witness.clone())).pack())
         .build();
+
+    // print!("witness is {:?}", serialized_witness);
 
     // build transaction
     let tx = TransactionBuilder::default()
         .input(input)
-        .witness(witness.as_bytes().pack())
+        .witness(witness_args.as_bytes().pack())
         .outputs(outputs)
         .outputs_data(outputs_data.pack())
         .cell_dep(lock_script_dep)

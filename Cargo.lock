@@ -363,6 +363,9 @@ name = "cellpool"
 version = "0.1.0"
 dependencies = [
  "ark-bls12-381",
+ "ark-crypto-primitives",
+ "ark-ec",
+ "ark-ed-on-bls12-381",
  "ark-groth16",
  "ark-serialize",
  "ark-snark",
