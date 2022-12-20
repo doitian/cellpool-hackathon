@@ -27,7 +27,7 @@ pub fn rollup_and_prove(
     transactions: &[SignedTransaction],
 ) -> Result<Proof, ProofError> {
     let rollup = state
-        .rollup_transactions(transactions, true, true)
+        .rollup_transactions_mut(transactions, true, true)
         .ok_or(ProofError::Rollup)?;
 
     let mut rng = ark_std::test_rng();

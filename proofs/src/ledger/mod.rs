@@ -265,51 +265,74 @@ impl State {
             .and_then(|id| self.get_account_information_from_id(id))
     }
 
+    pub fn validate_transactions(&self, transactions: &[SignedTransaction]) -> bool {
+        for tx in transactions {
+            if !tx.validate(&*self) {
+                return false;
+            }
+        }
+        true
+    }
+
     pub fn rollup_transactions(
+        &self,
+        transactions: &[SignedTransaction],
+        validate_transactions: bool,
+        create_non_existent_accounts: bool,
+    ) -> Option<(Self, Rollup)> {
+        let mut temp_state = self.clone();
+        let rollup = temp_state.rollup_transactions_mut(
+            transactions,
+            validate_transactions,
+            create_non_existent_accounts,
+        )?;
+        Some((temp_state, rollup))
+    }
+
+    pub fn rollup_transactions_mut(
         &mut self,
         transactions: &[SignedTransaction],
         validate_transactions: bool,
         _create_non_existent_accounts: bool,
     ) -> Option<Rollup> {
-        let ledger_params = self.parameters.clone();
+        if validate_transactions && !self.validate_transactions(transactions) {
+            return None;
+        }
         let num_tx = transactions.len();
         let initial_root = Some(self.current_root());
+        let ledger_params = self.parameters.clone();
         let mut sender_pre_tx_info_and_paths = Vec::with_capacity(num_tx);
         let mut recipient_pre_tx_info_and_paths = Vec::with_capacity(num_tx);
         let mut sender_post_paths = Vec::with_capacity(num_tx);
         let mut recipient_post_paths = Vec::with_capacity(num_tx);
         let mut post_tx_roots = Vec::with_capacity(num_tx);
         for tx in transactions {
-            if !tx.validate(&*self) && validate_transactions {
-                return None;
-            }
-        }
-        for tx in transactions {
             let sender_id = tx.sender();
             let recipient_id = tx.recipient();
             let sender_pre_acc_info = self.get_account_information_from_pk(&sender_id)?;
             let sender_pre_path = self
-                .current_merkle_tree_mut()
+                .current_merkle_tree()
                 .generate_proof(sender_pre_acc_info.id.0 as usize)
-                .unwrap();
+                .expect("Already validated transaction above");
             let recipient_pre_acc_info = self.get_account_information_from_pk(&recipient_id)?;
             let recipient_pre_path = self
                 .current_merkle_tree_mut()
                 .generate_proof(recipient_pre_acc_info.id.0 as usize)
-                .unwrap();
+                .expect("Already validated transaction above");
 
             if validate_transactions {
                 self.apply_transaction(tx)?;
             }
+
             let post_tx_root = self.current_root();
             let sender_post_path = self
-                .current_merkle_tree_mut()
+                .current_merkle_tree()
                 .generate_proof(sender_pre_acc_info.id.0 as usize)
-                .unwrap();
+                .expect("Already validated transaction above");
             let recipient_post_path = self
-                .current_merkle_tree_mut()
+                .current_merkle_tree()
                 .generate_proof(recipient_pre_acc_info.id.0 as usize)
-                .unwrap();
+                .expect("Already validated transaction above");
             sender_pre_tx_info_and_paths.push((sender_pre_acc_info, sender_pre_path));
             recipient_pre_tx_info_and_paths.push((recipient_pre_acc_info, recipient_pre_path));
             sender_post_paths.push(sender_post_path);

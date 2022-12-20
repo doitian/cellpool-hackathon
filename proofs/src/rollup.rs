@@ -285,7 +285,9 @@ mod test {
         let mut temp_state = state.clone();
         let tx1 = SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(5), &alice_sk, &mut rng);
         assert!(tx1.validate(&temp_state));
-        let rollup = temp_state.rollup_transactions(&[tx1], true, true).unwrap();
+        let rollup = temp_state
+            .rollup_transactions_mut(&[tx1], true, true)
+            .unwrap();
         assert!(test_cs(rollup));
 
         let mut temp_state = state.clone();
@@ -293,7 +295,7 @@ mod test {
         assert!(!bad_tx.validate(&temp_state));
         assert!(matches!(temp_state.apply_transaction(&bad_tx), None));
         let rollup = temp_state
-            .rollup_transactions(&[bad_tx.clone()], false, true)
+            .rollup_transactions_mut(&[bad_tx.clone()], false, true)
             .unwrap();
         assert!(!test_cs(rollup));
     }
@@ -317,13 +319,13 @@ mod test {
         let tx1 = SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(5), &alice_sk, &mut rng);
         assert!(tx1.validate(&temp_state));
         let rollup = temp_state
-            .rollup_transactions(&[tx1.clone()], true, true)
+            .rollup_transactions_mut(&[tx1.clone()], true, true)
             .unwrap();
         assert!(test_cs(rollup));
 
         let mut temp_state = state.clone();
         let rollup = temp_state
-            .rollup_transactions(&[tx1.clone(), tx1], true, true)
+            .rollup_transactions_mut(&[tx1.clone(), tx1], true, true)
             .unwrap();
         assert!(test_cs(rollup));
         assert_eq!(
@@ -346,7 +348,7 @@ mod test {
             SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(21), &alice_sk, &mut rng);
         assert!(!bad_tx.validate(&temp_state));
         assert!(matches!(temp_state.apply_transaction(&bad_tx), None));
-        let rollup = temp_state
+        let (_, rollup) = temp_state
             .rollup_transactions(&[bad_tx.clone()], false, true)
             .unwrap();
         assert!(!test_cs(rollup));
@@ -356,7 +358,7 @@ mod test {
         let bad_tx = SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(5), &bob_sk, &mut rng);
         assert!(!bad_tx.validate(&temp_state));
         assert!(matches!(temp_state.apply_transaction(&bad_tx), None));
-        let rollup = temp_state
+        let (_temp_state, rollup) = temp_state
             .rollup_transactions(&[bad_tx.clone()], false, true)
             .unwrap();
         assert!(!test_cs(rollup));
@@ -403,7 +405,9 @@ mod test {
             &mut rng,
         );
 
-        temp_state.rollup_transactions(&[tx1], true, true).unwrap()
+        temp_state
+            .rollup_transactions_mut(&[tx1], true, true)
+            .unwrap()
     }
 
     #[test]
