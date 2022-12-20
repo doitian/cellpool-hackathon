@@ -460,4 +460,28 @@ mod test {
         let rollup = temp_state.rollup_transactions_mut(&[tx1], true).unwrap();
         assert!(test_cs(rollup));
     }
+
+    #[test]
+    fn burn_assets() {
+        let mut rng = ark_std::test_rng();
+        let pp = Parameters::sample(&mut rng);
+        let mut state = State::new_with_parameters(32, &pp);
+        // Let's make an account for Alice.
+        let (alice_id, alice_pk, alice_sk) = state.sample_keys_and_register(&mut rng).unwrap();
+        // Let's give her some initial balance to start with.
+        state
+            .update_balance_by_id(&alice_id, Amount(20))
+            .expect("Alice's account should exist");
+
+        let mut temp_state = state.clone();
+        let tx1 = SignedTransaction::burn(&pp, alice_pk, Amount(5), &alice_sk, &mut rng);
+        assert!(tx1.validate(&temp_state, true));
+        let rollup = temp_state.rollup_transactions_mut(&[tx1], true).unwrap();
+        assert!(test_cs(rollup));
+
+        let bad_tx: SignedTransaction =
+            Transaction::new(alice_pk, sentinel_account(), Amount(5)).into();
+        let rollup = Rollup::with_state_and_transactions(&temp_state, &[bad_tx.clone()]);
+        assert!(!test_cs(rollup));
+    }
 }
