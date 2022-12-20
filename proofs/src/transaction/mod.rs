@@ -1,4 +1,5 @@
 use crate::account::{get_public_key_bytes, sentinel_account};
+use crate::serde::SerdeAsHex;
 use crate::signature::Signature;
 
 use crate::random_oracle::blake2s::RO;
@@ -14,17 +15,25 @@ use ark_ed_on_bls12_381::EdwardsProjective;
 use ark_serialize::*;
 use ark_std::rand::Rng;
 
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
+
 #[cfg(feature = "r1cs")]
 pub mod constraints;
 #[cfg(feature = "r1cs")]
 pub use constraints::*;
 
 /// Transaction transferring some amount from one account to another.
-#[derive(Copy, Clone, Debug, PartialEq, CanonicalSerialize, CanonicalDeserialize)]
+#[serde_as]
+#[derive(
+    Copy, Clone, Debug, PartialEq, CanonicalSerialize, CanonicalDeserialize, Serialize, Deserialize,
+)]
 pub struct Transaction {
     /// The account information of the sender.
+    #[serde_as(as = "SerdeAsHex")]
     pub sender: AccountPublicKey,
     /// The account information of the recipient.
+    #[serde_as(as = "SerdeAsHex")]
     pub recipient: AccountPublicKey,
     /// The amount being transferred from the sender to the receiver.
     pub amount: Amount,
@@ -64,7 +73,7 @@ pub fn get_transactions_hash(transactions: &[Transaction]) -> [u8; 32] {
 }
 
 /// Transaction transferring some amount from one account to another.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SignedTransaction {
     transaction: Transaction,
     /// The spend authorization is a signature over the sender, the recipient,

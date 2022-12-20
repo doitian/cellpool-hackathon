@@ -1,4 +1,6 @@
 use super::SignatureScheme;
+use crate::serde::BigUintAsHex;
+
 use ark_crypto_primitives::Error;
 use ark_ec::{AffineCurve, ProjectiveCurve};
 use ark_ff::{
@@ -13,6 +15,9 @@ use blake2::Blake2s;
 use digest::Digest;
 
 use derivative::Derivative;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
+
 #[cfg(feature = "r1cs")]
 pub mod constraints;
 
@@ -42,9 +47,12 @@ impl<C: ProjectiveCurve> ToBytes for SecretKey<C> {
     }
 }
 
-#[derive(Clone, Default, Debug)]
+#[serde_as]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct Signature<C: ProjectiveCurve> {
+    #[serde_as(as = "BigUintAsHex")]
     pub prover_response: C::ScalarField,
+    #[serde_as(as = "serde_with::hex::Hex")]
     pub verifier_challenge: [u8; 32],
 }
 

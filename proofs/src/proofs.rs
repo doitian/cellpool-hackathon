@@ -1,4 +1,5 @@
 use crate::ledger::{AccRoot, State, StateError};
+use crate::serde::SerdeAsBase64;
 
 use crate::transaction::{get_transactions_hash, SignedTransaction, Transaction};
 use crate::ConstraintF;
@@ -6,11 +7,18 @@ use ark_bls12_381::Bls12_381;
 use ark_groth16::Groth16;
 use ark_serialize::*;
 use ark_snark::SNARK;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use thiserror::Error;
 
-#[derive(Clone, Debug, PartialEq, CanonicalSerialize, CanonicalDeserialize)]
+#[serde_as]
+#[derive(
+    Clone, Debug, PartialEq, CanonicalSerialize, CanonicalDeserialize, Serialize, Deserialize,
+)]
 pub struct Proof {
+    #[serde_as(as = "SerdeAsBase64")]
     proof: ark_groth16::Proof<Bls12_381>,
+    #[serde_as(as = "SerdeAsBase64")]
     vk: <Groth16<Bls12_381> as SNARK<ConstraintF>>::VerifyingKey,
 }
 

@@ -653,6 +653,7 @@ dependencies = [
  "derivative",
  "digest 0.9.0",
  "hex",
+ "num-bigint",
  "serde",
  "serde_with",
  "thiserror",

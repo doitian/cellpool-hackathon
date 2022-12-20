@@ -4,6 +4,8 @@ use hex::{FromHex, ToHex};
 use ark_serialize::*;
 use serde::Deserialize;
 
+use num_bigint::BigUint;
+
 pub struct SerdeAsBytes;
 
 impl<T> serde_with::SerializeAs<T> for SerdeAsBytes
@@ -96,5 +98,36 @@ where
         let s = <String as Deserialize>::deserialize(deserializer)?;
         let bytes: Vec<u8> = Vec::<u8>::from_hex(s).map_err(serde::de::Error::custom)?;
         T::deserialize(&mut &bytes[..]).map_err(serde::de::Error::custom)
+    }
+}
+
+pub struct BigUintAsHex;
+
+impl<T> serde_with::SerializeAs<T> for BigUintAsHex
+where
+    T: Into<BigUint> + Clone,
+{
+    fn serialize_as<S>(val: &T, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let i: BigUint = val.clone().into();
+        let bytes = i.to_bytes_le();
+
+        serializer.serialize_str(&bytes.encode_hex::<String>())
+    }
+}
+
+impl<'de, T> serde_with::DeserializeAs<'de, T> for BigUintAsHex
+where
+    T: From<BigUint>,
+{
+    fn deserialize_as<D>(deserializer: D) -> Result<T, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let bytes: Vec<u8> = serde_with::Bytes::deserialize_as(deserializer)?;
+        let i: BigUint = BigUint::from_bytes_le(&bytes);
+        Ok(From::from(i))
     }
 }
