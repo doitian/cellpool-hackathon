@@ -1,4 +1,4 @@
-use crate::account::get_public_key_bytes;
+use crate::account::{get_public_key_bytes, sentinel_account};
 use crate::signature::Signature;
 
 use crate::random_oracle::blake2s::RO;
@@ -136,6 +136,10 @@ impl SignedTransaction {
     /// the transaction.
     /// 3. Verify that the recipient's account exists.
     pub fn validate(&self, state: &ledger::State, valid_signature: bool) -> bool {
+        // Minting assets are verified else where
+        if self.is_minting_transaction() {
+            return true;
+        }
         // Lookup public key corresponding to sender ID
         if let Some(sender_acc_info) = state.get_account_information_from_pk(&self.sender()) {
             let mut result = true;
@@ -187,6 +191,43 @@ impl SignedTransaction {
             transaction,
             signature,
         }
+    }
+
+    /// Create a transaction to burn assets.
+    pub fn burn<R: Rng>(
+        parameters: &ledger::Parameters,
+        sender: AccountPublicKey,
+        amount: Amount,
+        sender_sk: &AccountSecretKey,
+        rng: &mut R,
+    ) -> Self {
+        // The authorized message consists of (SenderAccId || RecipientAccId || Amount)
+        let transaction = Transaction::new(sender, sentinel_account(), amount);
+        let message = transaction.to_bytes_le();
+        let signature = Schnorr::sign(&parameters.sig_params, sender_sk, &message, rng).unwrap();
+        Self {
+            transaction,
+            signature,
+        }
+    }
+
+    /// Create a transaction to burn assets.
+    pub fn mint(recipient: AccountPublicKey, amount: Amount) -> Self {
+        // The authorized message consists of (SenderAccId || RecipientAccId || Amount)
+        let transaction = Transaction::new(sentinel_account(), recipient, amount);
+        let signature = Signature::default();
+        Self {
+            transaction,
+            signature,
+        }
+    }
+
+    pub fn is_burning_transaction(&self) -> bool {
+        self.recipient() == sentinel_account()
+    }
+
+    pub fn is_minting_transaction(&self) -> bool {
+        self.sender() == sentinel_account()
     }
 }
 

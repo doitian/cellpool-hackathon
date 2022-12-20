@@ -444,4 +444,20 @@ mod test {
         let valid_proof = Groth16::verify(&vk, &public_input, &proof).unwrap();
         assert!(!valid_proof);
     }
+
+    #[test]
+    fn mint_assets() {
+        let mut rng = ark_std::test_rng();
+        let pp = Parameters::sample(&mut rng);
+        let mut state = State::new_with_parameters(32, &pp);
+        // Let's make an account for Alice.
+        let (_alice_id, alice_pk, _alice_sk) = state.sample_keys_and_register(&mut rng).unwrap();
+
+        // Alice wants to transfer 5 units to Bob.
+        let mut temp_state = state.clone();
+        let tx1 = SignedTransaction::mint(alice_pk, Amount(5));
+        assert!(tx1.validate(&temp_state, true));
+        let rollup = temp_state.rollup_transactions_mut(&[tx1], true).unwrap();
+        assert!(test_cs(rollup));
+    }
 }

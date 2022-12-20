@@ -144,7 +144,8 @@ impl TransactionVar {
         let sender_recipient_different = (pre_sender_acc_info
             .public_key
             .is_neq(&pre_recipient_acc_info.public_key))?;
-        let good_normal_transaction: Boolean<ConstraintF> = (&is_minting.not())
+        let good_normal_transaction: Boolean<ConstraintF> = is_minting
+            .not()
             .and(&sender_exists)?
             .and(&sender_updated_correctly)?
             .and(&recipient_exists)?

@@ -1,3 +1,4 @@
+use crate::account::sentinel_account;
 use crate::rollup::Rollup;
 use crate::Transaction;
 
@@ -46,6 +47,10 @@ impl Amount {
 
     pub fn checked_sub(self, other: Self) -> Option<Self> {
         self.0.checked_sub(other.0).map(Self)
+    }
+
+    pub fn safe_amount_for_sentinel_account() -> Self {
+        Amount(u64::MAX / 2)
     }
 }
 
@@ -158,14 +163,29 @@ impl State {
         let pub_key_to_id = HashMap::with_capacity(num_accounts);
         let id_to_account_info = HashMap::with_capacity(num_accounts);
         let merkle_root: AccRoot = account_merkle_tree.root();
-        Self {
+        let mut state = Self {
             next_available_account: Some(AccountId(1)),
             id_to_account_info,
             pub_key_to_id,
             parameters: parameters.clone(),
             merkle_tree: account_merkle_tree,
             merkle_root_history: vec![merkle_root],
-        }
+        };
+
+        state.register(sentinel_account());
+        // TODO: fix this.
+        // Dirty hack to make burning and minting assets works.
+        // Otherwise, we need to check if the sender or recipient is the sentinel_account.
+        // If so, don't add/sub amount from it. But I Found no way to short circuit r1cs circuits.
+        // That is, r1cs circuits will always do checked_add/sub, thus proof
+        // generation/verification fails.
+        state
+            .update_balance_by_pk(
+                &sentinel_account(),
+                Amount::safe_amount_for_sentinel_account(),
+            )
+            .expect("Sentinel account is created above");
+        state
     }
 
     /// Return the root of the account Merkle tree.
@@ -255,17 +275,17 @@ impl State {
             .get_account_information_from_pk(&tx.sender())
             .expect("Must have checked validity of the transaction")
             .balance;
+        let new_sender_bal = old_sender_bal
+            .checked_sub(tx.amount())
+            .expect("Must have checked validity of the transaction");
+        self.update_balance_by_pk(&tx.sender(), new_sender_bal);
         let old_receiver_bal = self
             .get_account_information_from_pk(&tx.recipient())
             .expect("Must have checked validity of the transaction")
             .balance;
-        let new_sender_bal = old_sender_bal
-            .checked_sub(tx.amount())
-            .expect("Must have checked validity of the transaction");
         let new_receiver_bal = old_receiver_bal
             .checked_add(tx.amount())
             .expect("Must have checked validity of the transaction");
-        self.update_balance_by_pk(&tx.sender(), new_sender_bal);
         self.update_balance_by_pk(&tx.recipient(), new_receiver_bal);
     }
 
