@@ -129,8 +129,8 @@ pub struct State {
 
 #[derive(Error, Debug)]
 pub enum StateError {
-    #[error("Unexpected state fork")]
-    Fork,
+    #[error("Unexpected state fork at {0}")]
+    Fork(AccRoot),
     #[error("Invalid state root: {0} expected, {1} found")]
     InvalidTip(AccRoot, AccRoot),
     #[error("Trying to apply invalid transaction: {0:?}")]
@@ -270,8 +270,8 @@ impl State {
     }
 
     /// Update the state by applying the transaction `tx`, if `tx` is valid.
-    pub fn apply_transaction(&mut self, tx: &SignedTransaction) -> bool {
-        if tx.validate(self) {
+    pub fn apply_transaction(&mut self, tx: &SignedTransaction, validate_signature: bool) -> bool {
+        if tx.validate(self, validate_signature) {
             self.unsafe_apply_transaction(tx);
             true
         } else {
@@ -292,13 +292,14 @@ impl State {
             .and_then(|id| self.get_account_information_from_id(id))
     }
 
-    pub fn validate_transactions(&self, transactions: &[SignedTransaction]) -> bool {
-        for tx in transactions {
-            if !tx.validate(&*self) {
-                return false;
-            }
+    /// Commit current merkle tree root to merkle root history
+    pub fn commit_current_merkle_root(&mut self) -> AccRoot {
+        let last_root = self.merkle_root_history.last().expect("State initialized");
+        let current_root = self.current_root();
+        if *last_root != current_root {
+            self.merkle_root_history.push(current_root);
         }
-        true
+        current_root
     }
 
     pub fn catchup_transactions(
@@ -307,16 +308,29 @@ impl State {
         old_root: AccRoot,
         new_root: AccRoot,
     ) -> Result<(), StateError> {
+        // Check if transactions are already applied or there is an unexpected fork.
+        for (prev, next) in self
+            .merkle_root_history
+            .iter()
+            .zip(self.merkle_root_history.iter().skip(1))
+        {
+            if *prev == old_root {
+                if *next != new_root {
+                    return Err(StateError::Fork(old_root));
+                } else {
+                    return Ok(());
+                }
+            }
+        }
         if self.current_root() != old_root {
             return Err(StateError::InvalidTip(old_root, self.current_root()));
         }
         let transactions: Vec<SignedTransaction> = transactions.iter().map(Into::into).collect();
-        let (mut temp_state, _) = self.rollup_transactions(&transactions, false)?;
+        let (temp_state, _) = self.do_rollup_transactions(&transactions, false, true, false)?;
         let calculated_root = temp_state.current_root();
         if calculated_root != new_root {
             return Err(StateError::InvalidTip(calculated_root, new_root));
         }
-        temp_state.merkle_root_history.push(new_root);
         *self = temp_state;
         Ok(())
     }
@@ -326,7 +340,7 @@ impl State {
         transactions: &[SignedTransaction],
         create_non_existent_accounts: bool,
     ) -> Result<(Self, Rollup), StateError> {
-        self.do_rollup_transactions(transactions, create_non_existent_accounts, true)
+        self.do_rollup_transactions(transactions, create_non_existent_accounts, true, true)
     }
 
     pub(crate) fn do_rollup_transactions(
@@ -334,6 +348,7 @@ impl State {
         transactions: &[SignedTransaction],
         _create_non_existent_accounts: bool,
         validate_transactions: bool, // When set, only generating a not working rollup, useful for testing.
+        validate_signatures: bool,   // Disable signature verfication for verified transactions.
     ) -> Result<(Self, Rollup), StateError> {
         let mut temp_state = self.clone();
         let num_tx = transactions.len();
@@ -358,11 +373,11 @@ impl State {
                 .get_account_information_from_pk(&recipient_id)
                 .ok_or(StateError::AccountNotFound(recipient_id))?;
             let recipient_pre_path = temp_state
-                .current_merkle_tree_mut()
+                .current_merkle_tree()
                 .generate_proof(recipient_pre_acc_info.id.0 as usize)
                 .expect("Already validated transaction above");
 
-            if validate_transactions && !temp_state.apply_transaction(tx) {
+            if validate_transactions && !temp_state.apply_transaction(tx, validate_signatures) {
                 return Err(StateError::InvalidTransaction(tx.clone()));
             }
 
@@ -432,18 +447,18 @@ mod test {
 
         // Alice wants to transfer 5 units to Bob.
         let tx1 = SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(5), &alice_sk, &mut rng);
-        assert!(tx1.validate(&state));
-        assert!(state.apply_transaction(&tx1));
+        assert!(tx1.validate(&state, true));
+        assert!(state.apply_transaction(&tx1, true));
         // Let's try creating invalid transactions:
         // First, let's try a transaction where the amount is larger than Alice's balance.
         let bad_tx =
             SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(6), &alice_sk, &mut rng);
-        assert!(!bad_tx.validate(&state));
-        assert!(!state.apply_transaction(&bad_tx));
+        assert!(!bad_tx.validate(&state, true));
+        assert!(!state.apply_transaction(&bad_tx, true));
         // Next, let's try a transaction where the signature is incorrect:
         let bad_tx = SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(5), &bob_sk, &mut rng);
-        assert!(!bad_tx.validate(&state));
-        assert!(!state.apply_transaction(&bad_tx));
+        assert!(!bad_tx.validate(&state, true));
+        assert!(!state.apply_transaction(&bad_tx, true));
 
         // Finally, let's try a transaction to an non-existant account:
         let bad_tx = SignedTransaction::create(
@@ -454,7 +469,49 @@ mod test {
             &alice_sk,
             &mut rng,
         );
-        assert!(!bad_tx.validate(&state));
-        assert!(!state.apply_transaction(&bad_tx));
+        assert!(!bad_tx.validate(&state, true));
+        assert!(!state.apply_transaction(&bad_tx, true));
+    }
+
+    #[test]
+    fn catchup_transactions() {
+        let mut rng = ark_std::test_rng();
+        let pp = Parameters::sample(&mut rng);
+        let mut state = State::new_with_parameters(32, &pp);
+        let (alice_id, alice_pk, alice_sk) = state.sample_keys_and_register(&mut rng).unwrap();
+        state
+            .update_balance_by_id(&alice_id, Amount(10))
+            .expect("Alice's account should exist");
+        let (_bob_id, bob_pk, bob_sk) = state.sample_keys_and_register(&mut rng).unwrap();
+
+        // Apply transaction 1
+        let old_root = state.commit_current_merkle_root();
+        let tx1 = SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(5), &alice_sk, &mut rng);
+        assert!(state.rollup_transactions_mut(&[tx1.clone()], true).is_ok());
+
+        // Reapply transaction 1
+        let new_root = state.current_root();
+        assert!(state
+            .catchup_transactions(&[(&tx1).into()], old_root, new_root)
+            .is_ok());
+
+        // Apply transaction 2
+        let tx2 = SignedTransaction::create(&pp, bob_pk, alice_pk, Amount(3), &bob_sk, &mut rng);
+        assert!(state.rollup_transactions_mut(&[tx2.clone()], false).is_ok());
+
+        // Apply transaction 1 with the wrong final root
+        assert!(state
+            .catchup_transactions(&[(&tx1).into()], new_root, old_root)
+            .is_err());
+
+        // Reapply transaction 2
+        assert!(state
+            .catchup_transactions(&[tx2.into()], new_root, state.current_root())
+            .is_ok());
+
+        // Reapply transaction 1
+        assert!(state
+            .catchup_transactions(&[(&tx1).into()], old_root, new_root)
+            .is_ok());
     }
 }

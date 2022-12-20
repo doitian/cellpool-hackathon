@@ -96,7 +96,7 @@ impl Rollup {
 
     pub fn with_state_and_transactions(state: &State, transactions: &[SignedTransaction]) -> Self {
         state
-            .do_rollup_transactions(transactions, true, false)
+            .do_rollup_transactions(transactions, true, false, false)
             .expect("Transactions are not validated, must generate rollup")
             .1
     }
@@ -291,14 +291,14 @@ mod test {
         // Alice wants to transfer 5 units to Bob.
         let mut temp_state = state.clone();
         let tx1 = SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(5), &alice_sk, &mut rng);
-        assert!(tx1.validate(&temp_state));
+        assert!(tx1.validate(&temp_state, true));
         let rollup = temp_state.rollup_transactions_mut(&[tx1], true).unwrap();
         assert!(test_cs(rollup));
 
         let mut temp_state = state.clone();
         let bad_tx = SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(5), &bob_sk, &mut rng);
-        assert!(!bad_tx.validate(&temp_state));
-        assert!(!temp_state.apply_transaction(&bad_tx));
+        assert!(!bad_tx.validate(&temp_state, true));
+        assert!(!temp_state.apply_transaction(&bad_tx, true));
         let rollup = Rollup::with_state_and_transactions(&temp_state, &[bad_tx.clone()]);
         assert!(!test_cs(rollup));
     }
@@ -320,7 +320,7 @@ mod test {
         // Alice wants to transfer 5 units to Bob.
         let mut temp_state = state.clone();
         let tx1 = SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(5), &alice_sk, &mut rng);
-        assert!(tx1.validate(&temp_state));
+        assert!(tx1.validate(&temp_state, true));
         let rollup = temp_state
             .rollup_transactions_mut(&[tx1.clone()], true)
             .unwrap();
@@ -349,16 +349,16 @@ mod test {
         let mut temp_state = state.clone();
         let bad_tx =
             SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(21), &alice_sk, &mut rng);
-        assert!(!bad_tx.validate(&temp_state));
-        assert!(!temp_state.apply_transaction(&bad_tx));
+        assert!(!bad_tx.validate(&temp_state, true));
+        assert!(!temp_state.apply_transaction(&bad_tx, true));
         let rollup = Rollup::with_state_and_transactions(&temp_state, &[bad_tx.clone()]);
         assert!(!test_cs(rollup));
 
         // Next, let's try a transaction where the signature is incorrect:
         let mut temp_state = state.clone();
         let bad_tx = SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(5), &bob_sk, &mut rng);
-        assert!(!bad_tx.validate(&temp_state));
-        assert!(!temp_state.apply_transaction(&bad_tx));
+        assert!(!bad_tx.validate(&temp_state, true));
+        assert!(!temp_state.apply_transaction(&bad_tx, true));
         let rollup = Rollup::with_state_and_transactions(&temp_state, &[bad_tx.clone()]);
         assert!(!test_cs(rollup));
 
@@ -371,8 +371,8 @@ mod test {
             &alice_sk,
             &mut rng,
         );
-        assert!(!bad_tx.validate(&state));
-        assert!(!temp_state.apply_transaction(&bad_tx));
+        assert!(!bad_tx.validate(&state, true));
+        assert!(!temp_state.apply_transaction(&bad_tx, true));
     }
 
     // Builds a circuit with two txs, using different pubkeys & amounts every time.

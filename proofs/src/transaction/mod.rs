@@ -30,6 +30,7 @@ pub struct Transaction {
     pub amount: Amount,
     /// The fee being collected by the miner.
     pub fee: Amount,
+    // TODO: add nonce to prevent replay attacks.
 }
 
 impl Transaction {
@@ -134,7 +135,7 @@ impl SignedTransaction {
     /// 2. Verify that the sender's account has sufficient balance to finance
     /// the transaction.
     /// 3. Verify that the recipient's account exists.
-    pub fn validate(&self, state: &ledger::State) -> bool {
+    pub fn validate(&self, state: &ledger::State, valid_signature: bool) -> bool {
         // Lookup public key corresponding to sender ID
         if let Some(sender_acc_info) = state.get_account_information_from_pk(&self.sender()) {
             let mut result = true;
@@ -152,10 +153,11 @@ impl SignedTransaction {
                 )
                 .unwrap()
             };
-            // Verify the signature against the sender pubkey.
-            result &=
-                self.verify_signature(&state.parameters.sig_params, &sender_acc_info.public_key);
-            // assert!(result, "signature verification failed");
+            if valid_signature {
+                // Verify the signature against the sender pubkey.
+                result &= self
+                    .verify_signature(&state.parameters.sig_params, &sender_acc_info.public_key);
+            }
             // Verify the amount is available in the sender account.
             result &= self.amount() <= sender_acc_info.balance;
             // Verify that recipient account exists.
