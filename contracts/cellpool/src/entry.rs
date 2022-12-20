@@ -15,6 +15,13 @@ use ckb_std::{
 
 use crate::error::Error;
 
+use ark_serialize::*;
+use ark_bls12_381::{Bls12_381, Fr};
+use ark_groth16::Groth16;
+use ark_snark::SNARK;
+
+type VerifyingKey = <Groth16<Bls12_381> as SNARK<Fr>>::VerifyingKey;
+
 // args
 // - vk: VerifyingKey<Bls12_381> https://github.com/arkworks-rs/groth16/blob/3464e7910093723481fb98326b040025c5669b58/src/data_structures.rs#L31
 //
@@ -28,10 +35,12 @@ pub fn main() -> Result<(), Error> {
 
     // return an error if args is invalid
     if args.is_empty() {
-        return Err(Error::MyError);
+        return Err(Error::EmptyArgs);
     }
 
     // 1. Load vk from args
+    let vk = VerifyingKey::deserialize_uncompressed(&*args).unwrap();
+
     // 2. Setup inputs from input / output cell data and witness
     // 3. Run Groth16 to verify
 

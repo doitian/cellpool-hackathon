@@ -7,3 +7,8 @@ edition = "2021"
 
 [dependencies]
 ckb-std = "0.10.0"
+ark-std = { version = "^0.3.0", default-features = false }
+ark-bls12-381 = { version = "^0.3.0", features = ["curve"] }
+ark-groth16 = { version = "^0.3.0", default-features = false }
+ark-serialize = { version = "^0.3.0", default-features = false }
+ark-snark = { version = "^0.3.0", default-features = false }

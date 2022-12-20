@@ -362,6 +362,11 @@ checksum = "a20104e2335ce8a659d6dd92a51a767a0c062599c73b343fd152cb401e828c3d"
 name = "cellpool"
 version = "0.1.0"
 dependencies = [
+ "ark-bls12-381",
+ "ark-groth16",
+ "ark-serialize",
+ "ark-snark",
+ "ark-std",
  "ckb-std",
 ]
 
@@ -1839,6 +1844,12 @@ dependencies = [
 name = "tests"
 version = "0.1.0"
 dependencies = [
+ "ark-bls12-381",
+ "ark-groth16",
+ "ark-serialize",
+ "ark-snark",
+ "ark-std",
+ "cellpool-proofs",
  "ckb-testtool",
 ]
 
