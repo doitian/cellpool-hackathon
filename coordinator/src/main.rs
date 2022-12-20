@@ -36,11 +36,10 @@ async fn uncommitted_transactions_handler(
 async fn create_transaction_handler(
     data: web::Data<StateData>,
     transaction: Json<SignedTransaction>,
-) -> Json<Vec<SignedTransaction>> {
+) -> Json<SignedTransaction> {
     let mut uncommitted_transactions = data.uncommitted_transactions.lock().unwrap();
     uncommitted_transactions.push(transaction.clone());
-    let uncommitted_transactions = uncommitted_transactions.clone();
-    Json(uncommitted_transactions)
+    Json(transaction.clone())
 }
 
 #[get("/rollup")]

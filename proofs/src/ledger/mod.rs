@@ -267,11 +267,15 @@ impl State {
     ) -> Result<(), StateError> {
         // TODO: check account limit here.
         let id = account_info.id;
+        let pk = account_info.public_key;
+        let balance = account_info.balance;
         if self.id_to_account_info.contains_key(&id) {
             return Err(StateError::Existed(id));
         };
 
         self.id_to_account_info.insert(id, account_info);
+        self.pub_key_to_id.insert(pk, id);
+        self.update_balance_by_id(&id, balance);
         let next_id = self.next_available_account.expect("State initialized");
         if next_id <= id {
             self.next_available_account = Some(AccountId(id.0 + 1))
