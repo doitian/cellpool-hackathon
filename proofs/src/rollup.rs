@@ -1,4 +1,4 @@
-use crate::account::AccountInformationVar;
+use crate::account::{sentinel_account, AccountInformationVar, AccountPublicKeyVar};
 use crate::random_oracle::blake2s::constraints::ROGadget;
 use crate::random_oracle::blake2s::RO;
 use crate::random_oracle::constraints::RandomOracleGadget;
@@ -125,6 +125,11 @@ impl ConstraintSynthesizer<ConstraintF> for &Rollup {
             self.final_root.ok_or(SynthesisError::AssignmentMissing)
         })?;
 
+        let sentinel_pk = AccountPublicKeyVar::new_constant(
+            ark_relations::ns!(cs, "Sentinel pk"),
+            sentinel_account(),
+        )?;
+
         // Enforce the transacations hash from input is legal
         let transaction_list = self
             .transactions
@@ -226,6 +231,7 @@ impl ConstraintSynthesizer<ConstraintF> for &Rollup {
 
             // Validate that the transaction signature and amount is correct.
             tx.validate(
+                &sentinel_pk,
                 &ledger_params,
                 &signature,
                 &sender_acc_info,
