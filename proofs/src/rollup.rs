@@ -286,16 +286,19 @@ mod test {
         let tx1 = SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(5), &alice_sk, &mut rng);
         assert!(tx1.validate(&temp_state));
         let rollup = temp_state.rollup_transactions_mut(&[tx1], true).unwrap();
+        dbg!("transferred");
         assert!(test_cs(rollup));
+        dbg!("transferred");
 
         let mut temp_state = state.clone();
         let bad_tx = SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(5), &bob_sk, &mut rng);
         assert!(!bad_tx.validate(&temp_state));
-        assert!(matches!(temp_state.apply_transaction(&bad_tx), None));
+        assert!(!temp_state.apply_transaction(&bad_tx));
         let rollup = temp_state
             .do_rollup_transactions_mut(&[bad_tx.clone()], false, true)
             .unwrap();
         assert!(!test_cs(rollup));
+        dbg!("transferred");
     }
 
     #[test]
@@ -345,7 +348,7 @@ mod test {
         let bad_tx =
             SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(21), &alice_sk, &mut rng);
         assert!(!bad_tx.validate(&temp_state));
-        assert!(matches!(temp_state.apply_transaction(&bad_tx), None));
+        assert!(!temp_state.apply_transaction(&bad_tx));
         let rollup = temp_state
             .do_rollup_transactions_mut(&[bad_tx.clone()], false, true)
             .unwrap();
@@ -355,7 +358,7 @@ mod test {
         let mut temp_state = state.clone();
         let bad_tx = SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(5), &bob_sk, &mut rng);
         assert!(!bad_tx.validate(&temp_state));
-        assert!(matches!(temp_state.apply_transaction(&bad_tx), None));
+        assert!(!temp_state.apply_transaction(&bad_tx));
         let rollup = temp_state
             .do_rollup_transactions_mut(&[bad_tx.clone()], false, true)
             .unwrap();
@@ -371,7 +374,7 @@ mod test {
             &mut rng,
         );
         assert!(!bad_tx.validate(&state));
-        assert!(matches!(temp_state.apply_transaction(&bad_tx), None));
+        assert!(!temp_state.apply_transaction(&bad_tx));
     }
 
     // Builds a circuit with two txs, using different pubkeys & amounts every time.

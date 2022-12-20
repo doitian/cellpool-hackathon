@@ -235,20 +235,33 @@ impl State {
             .and_then(|acc| self.update_balance_by_id(&acc.id, new_amount))
     }
 
+    /// Update the state by applying the transaction `tx`, assuming `tx` is valid.
+    pub(crate) fn unsafe_apply_transaction(&mut self, tx: &SignedTransaction) {
+        let old_sender_bal = self
+            .get_account_information_from_pk(&tx.sender())
+            .expect("Must have checked validity of the transaction")
+            .balance;
+        let old_receiver_bal = self
+            .get_account_information_from_pk(&tx.recipient())
+            .expect("Must have checked validity of the transaction")
+            .balance;
+        let new_sender_bal = old_sender_bal
+            .checked_sub(tx.amount())
+            .expect("Must have checked validity of the transaction");
+        let new_receiver_bal = old_receiver_bal
+            .checked_add(tx.amount())
+            .expect("Must have checked validity of the transaction");
+        self.update_balance_by_pk(&tx.sender(), new_sender_bal);
+        self.update_balance_by_pk(&tx.recipient(), new_receiver_bal);
+    }
+
     /// Update the state by applying the transaction `tx`, if `tx` is valid.
-    pub fn apply_transaction(&mut self, tx: &SignedTransaction) -> Option<()> {
+    pub fn apply_transaction(&mut self, tx: &SignedTransaction) -> bool {
         if tx.validate(self) {
-            let old_sender_bal = self.get_account_information_from_pk(&tx.sender())?.balance;
-            let old_receiver_bal = self
-                .get_account_information_from_pk(&tx.recipient())?
-                .balance;
-            let new_sender_bal = old_sender_bal.checked_sub(tx.amount())?;
-            let new_receiver_bal = old_receiver_bal.checked_add(tx.amount())?;
-            self.update_balance_by_pk(&tx.sender(), new_sender_bal);
-            self.update_balance_by_pk(&tx.recipient(), new_receiver_bal);
-            Some(())
+            self.unsafe_apply_transaction(tx);
+            true
         } else {
-            None
+            false
         }
     }
 
@@ -277,11 +290,64 @@ impl State {
     pub fn rollup_transactions(
         &self,
         transactions: &[SignedTransaction],
-        create_non_existent_accounts: bool,
+        _create_non_existent_accounts: bool,
     ) -> Option<(Self, Rollup)> {
         let mut temp_state = self.clone();
-        let rollup =
-            temp_state.rollup_transactions_mut(transactions, create_non_existent_accounts)?;
+        let num_tx = transactions.len();
+        let initial_root = Some(temp_state.current_root());
+        let ledger_params = temp_state.parameters.clone();
+        let mut sender_pre_tx_info_and_paths = Vec::with_capacity(num_tx);
+        let mut recipient_pre_tx_info_and_paths = Vec::with_capacity(num_tx);
+        let mut sender_post_paths = Vec::with_capacity(num_tx);
+        let mut recipient_post_paths = Vec::with_capacity(num_tx);
+        let mut post_tx_roots = Vec::with_capacity(num_tx);
+        for tx in transactions {
+            let sender_id = tx.sender();
+            let recipient_id = tx.recipient();
+            let sender_pre_acc_info = temp_state.get_account_information_from_pk(&sender_id)?;
+            let sender_pre_path = temp_state
+                .current_merkle_tree()
+                .generate_proof(sender_pre_acc_info.id.0 as usize)
+                .expect("Already validated transaction above");
+            let recipient_pre_acc_info =
+                temp_state.get_account_information_from_pk(&recipient_id)?;
+            let recipient_pre_path = temp_state
+                .current_merkle_tree_mut()
+                .generate_proof(recipient_pre_acc_info.id.0 as usize)
+                .expect("Already validated transaction above");
+
+            if !temp_state.apply_transaction(tx) {
+                return None;
+            }
+
+            let post_tx_root = temp_state.current_root();
+            let sender_post_path = temp_state
+                .current_merkle_tree()
+                .generate_proof(sender_pre_acc_info.id.0 as usize)
+                .expect("Already validated transaction above");
+            let recipient_post_path = temp_state
+                .current_merkle_tree()
+                .generate_proof(recipient_pre_acc_info.id.0 as usize)
+                .expect("Already validated transaction above");
+            sender_pre_tx_info_and_paths.push((sender_pre_acc_info, sender_pre_path));
+            recipient_pre_tx_info_and_paths.push((recipient_pre_acc_info, recipient_pre_path));
+            sender_post_paths.push(sender_post_path);
+            recipient_post_paths.push(recipient_post_path);
+            post_tx_roots.push(post_tx_root);
+        }
+
+        let rollup = Rollup {
+            ledger_params,
+            initial_root,
+            final_root: Some(temp_state.current_root()),
+            transactions: Some(transactions.iter().map(Into::into).collect()),
+            signatures: Some(transactions.iter().map(|s| s.signature.clone()).collect()),
+            sender_pre_tx_info_and_paths: Some(sender_pre_tx_info_and_paths),
+            recv_pre_tx_info_and_paths: Some(recipient_pre_tx_info_and_paths),
+            sender_post_paths: Some(sender_post_paths),
+            recv_post_paths: Some(recipient_post_paths),
+            post_tx_roots: Some(post_tx_roots),
+        };
         Some((temp_state, rollup))
     }
 
@@ -290,7 +356,10 @@ impl State {
         transactions: &[SignedTransaction],
         create_non_existent_accounts: bool,
     ) -> Option<Rollup> {
-        self.do_rollup_transactions_mut(transactions, true, create_non_existent_accounts)
+        let (temp_state, rollup) =
+            self.rollup_transactions(transactions, create_non_existent_accounts)?;
+        *self = temp_state;
+        Some(rollup)
     }
 
     // Expose the validate_transactions parameter for testing.
@@ -326,7 +395,7 @@ impl State {
                 .expect("Already validated transaction above");
 
             if validate_transactions {
-                self.apply_transaction(tx)?;
+                self.unsafe_apply_transaction(tx);
             }
 
             let post_tx_root = self.current_root();
@@ -382,17 +451,17 @@ mod test {
         // Alice wants to transfer 5 units to Bob.
         let tx1 = SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(5), &alice_sk, &mut rng);
         assert!(tx1.validate(&state));
-        state.apply_transaction(&tx1).expect("should work");
+        assert!(state.apply_transaction(&tx1));
         // Let's try creating invalid transactions:
         // First, let's try a transaction where the amount is larger than Alice's balance.
         let bad_tx =
             SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(6), &alice_sk, &mut rng);
         assert!(!bad_tx.validate(&state));
-        assert!(matches!(state.apply_transaction(&bad_tx), None));
+        assert!(!state.apply_transaction(&bad_tx));
         // Next, let's try a transaction where the signature is incorrect:
         let bad_tx = SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(5), &bob_sk, &mut rng);
         assert!(!bad_tx.validate(&state));
-        assert!(matches!(state.apply_transaction(&bad_tx), None));
+        assert!(!state.apply_transaction(&bad_tx));
 
         // Finally, let's try a transaction to an non-existant account:
         let bad_tx = SignedTransaction::create(
@@ -404,6 +473,6 @@ mod test {
             &mut rng,
         );
         assert!(!bad_tx.validate(&state));
-        assert!(matches!(state.apply_transaction(&bad_tx), None));
+        assert!(!state.apply_transaction(&bad_tx));
     }
 }
