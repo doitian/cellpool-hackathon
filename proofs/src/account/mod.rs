@@ -55,7 +55,7 @@ impl AccountId {
 }
 
 /// Information about the account, such as the balance and the associated public key.
-#[derive(Hash, Eq, PartialEq, Copy, Clone)]
+#[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct AccountInformation {
     /// The account public key.
     pub id: AccountId,

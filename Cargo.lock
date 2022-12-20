@@ -621,6 +621,8 @@ name = "cellpool-coordinator"
 version = "0.1.0"
 dependencies = [
  "actix-web",
+ "cellpool-proofs",
+ "derivative",
 ]
 
 [[package]]
@@ -643,6 +645,7 @@ dependencies = [
  "blake2",
  "derivative",
  "digest 0.9.0",
+ "serde",
  "thiserror",
  "tracing",
  "tracing-subscriber",

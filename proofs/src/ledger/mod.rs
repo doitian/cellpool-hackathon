@@ -13,6 +13,7 @@ use ark_crypto_primitives::merkle_tree::{self, MerkleTree, Path};
 use ark_ed_on_bls12_381::EdwardsProjective;
 use ark_serialize::*;
 use ark_std::rand::Rng;
+use derivative::Derivative;
 use std::collections::HashMap;
 use thiserror::Error;
 
@@ -55,7 +56,7 @@ impl Amount {
 }
 
 /// The parameters that are used in transaction creation and validation.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Parameters {
     pub sig_params: schnorr::Parameters<EdwardsProjective>,
     pub leaf_crh_params: <TwoToOneHash as CRH>::Parameters,
@@ -116,7 +117,8 @@ pub type AccRoot = <TwoToOneHash as TwoToOneCRH>::Output;
 /// A membership proof for a given account.
 pub type AccPath = Path<MerkleConfig>;
 
-#[derive(Clone)]
+#[derive(Derivative, Clone)]
+#[derivative(Debug)]
 pub struct State {
     /// What is the next available account identifier?
     pub next_available_account: Option<AccountId>,
@@ -127,6 +129,7 @@ pub struct State {
     /// Parameters used for signature verification.
     pub parameters: Parameters,
     /// Acccount Merkle tree.
+    #[derivative(Debug = "ignore")]
     pub merkle_tree: AccMerkleTree,
     /// Acccount Merkle tree root history, used to track which batch of transactions are applied.
     pub merkle_root_history: Vec<AccRoot>,
