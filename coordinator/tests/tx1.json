@@ -1,0 +1,12 @@
+{
+  "transaction": {
+    "sender": "24d00ecdb96c97df68d2cbc8e5b92d2f766f64ac209df473347e4973da62d337",
+    "recipient": "6502b9fe0ff15d22b88638040af8cac3399177c2c7438184c669bddc7fa7a9be",
+    "amount": 5,
+    "fee": 0
+  },
+  "signature": {
+    "prover_response": "1430487431de422b955bf3e6f2d2a49c33256690c235238dc9e53c0f1cb9fd00",
+    "verifier_challenge": "188e8cd831f0879d7138bcf6bfa8f072047298b797b557f4c2fedfe83e657567"
+  }
+}

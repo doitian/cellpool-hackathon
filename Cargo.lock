@@ -629,6 +629,7 @@ dependencies = [
  "actix-web",
  "cellpool-proofs",
  "derivative",
+ "serde_json",
 ]
 
 [[package]]

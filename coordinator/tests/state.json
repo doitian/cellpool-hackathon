@@ -1,0 +1,21 @@
+{
+  "merkle_tree_root": "43c0b4e4b9c44ab78831c363c047408fbd9ff6cbbbd9db33046fdafcafd94859",
+  "num_of_accounts": 256,
+  "accounts": [
+    {
+      "id": 1,
+      "public_key": "2b12d19214076b3e62721f7dfd6a2fe73b3dbf9fb965a3868021e1235dfeda11",
+      "balance": 9223372036854775807
+    },
+    {
+      "id": 2,
+      "public_key": "24d00ecdb96c97df68d2cbc8e5b92d2f766f64ac209df473347e4973da62d337",
+      "balance": 10000
+    },
+    {
+      "id": 3,
+      "public_key": "6502b9fe0ff15d22b88638040af8cac3399177c2c7438184c669bddc7fa7a9be",
+      "balance": 4242
+    }
+  ]
+}
