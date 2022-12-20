@@ -23,6 +23,7 @@ use ark_groth16::{Groth16, Proof};
 use ark_serialize::*;
 use ark_snark::SNARK;
 use ark_std::vec::Vec;
+use blake2::{Blake2s, Digest};
 
 type VerifyingKey = <Groth16<Bls12_381> as SNARK<Fr>>::VerifyingKey;
 type TwoToOneHash = PedersenCRHCompressor<EdwardsProjective, TECompressor, TwoToOneWindow>;
@@ -70,6 +71,40 @@ pub struct Transaction {
     pub fee: Amount,
 }
 
+impl Amount {
+    pub fn to_bytes_le(&self) -> Vec<u8> {
+        self.0.to_le_bytes().to_vec()
+    }
+}
+
+impl Transaction {
+    /// Convert the transaction information to bytes.
+    pub fn to_bytes_le(&self) -> Vec<u8> {
+        ark_ff::to_bytes![
+            get_public_key_bytes(&self.sender),
+            get_public_key_bytes(&self.recipient),
+            self.amount.to_bytes_le(),
+            self.fee.to_bytes_le()
+        ]
+        .unwrap()
+    }
+}
+
+pub fn get_public_key_bytes(pk: &AccountPublicKey) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    pk.serialize_uncompressed(&mut bytes)
+        .expect("Must serialize public key");
+    bytes
+}
+
+fn ro_evaluate(input: &[u8]) -> [u8; 32] {
+    let mut h = Blake2s::new();
+    h.update(input);
+    let mut result = [0u8; 32];
+    result.copy_from_slice(&h.finalize());
+    result
+}
+
 fn load_final_root(script: &Script) -> Result<Vec<u8>, Error> {
     for i in 0.. {
         let lock = load_cell_lock(i, Source::Output)?;
@@ -79,6 +114,30 @@ fn load_final_root(script: &Script) -> Result<Vec<u8>, Error> {
     }
 
     Err(Error::NoFinalRoot)
+}
+
+pub fn get_transactions_hash(transactions: &[Transaction]) -> [u8; 32] {
+    let mut hash_input = Vec::new();
+    for transaction in transactions {
+        hash_input.extend_from_slice(&transaction.to_bytes_le());
+    }
+    ro_evaluate(&hash_input)
+}
+
+fn get_public_inputs(
+    initial_root: AccRoot,
+    final_root: AccRoot,
+    transactions: Vec<Transaction>,
+) -> Vec<Fr> {
+    use ark_ff::ToConstraintField;
+    let transaction_fields: Vec<Fr> = get_transactions_hash(&transactions[..])
+        .to_field_elements()
+        .unwrap();
+    let mut result = Vec::with_capacity(transaction_fields.len() + 2);
+    result.push(initial_root);
+    result.push(final_root);
+    result.extend(transaction_fields);
+    result
 }
 
 // args
@@ -113,8 +172,12 @@ pub fn main() -> Result<(), Error> {
         .unpack();
     // debug!("witness is {:?}", witness_bytes);
     let witness = CellPoolWitness::deserialize_uncompressed(&*witness_bytes).unwrap();
+    let proof = witness.proof;
+    let transactions = witness.transactions;
 
     // 3. Run Groth16 to verify
+    let public_inputs = get_public_inputs(initial_root, final_root, transactions);
+    Groth16::verify(&vk, &public_inputs, &proof).unwrap();
 
     Ok(())
 }

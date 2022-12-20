@@ -366,10 +366,12 @@ dependencies = [
  "ark-crypto-primitives",
  "ark-ec",
  "ark-ed-on-bls12-381",
+ "ark-ff",
  "ark-groth16",
  "ark-serialize",
  "ark-snark",
  "ark-std",
+ "blake2",
  "ckb-std",
 ]
 
