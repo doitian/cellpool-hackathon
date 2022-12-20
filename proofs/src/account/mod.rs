@@ -2,7 +2,7 @@ use super::ledger::*;
 use super::signature::schnorr;
 
 use ark_ed_on_bls12_381::EdwardsProjective;
-use ark_serialize::CanonicalSerialize;
+use ark_serialize::*;
 
 #[cfg(feature = "r1cs")]
 pub mod constraints;
@@ -36,7 +36,18 @@ pub fn non_existent_account() -> AccountPublicKey {
 }
 
 /// Account identifier. This prototype supports only 256 accounts at a time.
-#[derive(Hash, Eq, PartialEq, Copy, Clone, Ord, PartialOrd, Debug)]
+#[derive(
+    Hash,
+    Eq,
+    PartialEq,
+    Copy,
+    Clone,
+    Ord,
+    PartialOrd,
+    Debug,
+    CanonicalSerialize,
+    CanonicalDeserialize,
+)]
 pub struct AccountId(pub WrappedAccountId);
 type WrappedAccountId = u16;
 
@@ -55,7 +66,7 @@ impl AccountId {
 }
 
 /// Information about the account, such as the balance and the associated public key.
-#[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Hash, Eq, PartialEq, Copy, Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
 pub struct AccountInformation {
     /// The account public key.
     pub id: AccountId,

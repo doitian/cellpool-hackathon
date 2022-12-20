@@ -15,6 +15,7 @@ use ark_serialize::*;
 use ark_std::rand::Rng;
 use derivative::Derivative;
 use std::collections::HashMap;
+use std::num;
 use thiserror::Error;
 
 #[cfg(feature = "r1cs")]
@@ -135,6 +136,8 @@ pub struct State {
     pub merkle_root_history: Vec<AccRoot>,
 }
 
+const DEFUALT_NUM_OF_ACCOUNTS: usize = 256;
+
 #[derive(Error, Debug)]
 pub enum StateError {
     #[error("Unexpected state fork at {0}")]
@@ -149,13 +152,14 @@ pub enum StateError {
 
 impl State {
     /// Create an empty ledger that supports `num_accounts` accounts.
-    pub fn new(num_accounts: usize) -> Self {
+    pub fn new() -> Self {
         let parameters = Parameters::unsecure_hardcoded_parameters();
-        Self::new_with_parameters(num_accounts, &parameters)
+        Self::new_with_parameters(&parameters)
     }
 
     /// Create an empty ledger that supports `num_accounts` accounts.
-    pub fn new_with_parameters(num_accounts: usize, parameters: &Parameters) -> Self {
+    pub fn new_blank_state(parameters: &Parameters) -> Self {
+        let num_accounts = DEFUALT_NUM_OF_ACCOUNTS;
         let height = ark_std::log2(num_accounts);
         let account_merkle_tree = MerkleTree::blank(
             &parameters.leaf_crh_params,
@@ -166,14 +170,19 @@ impl State {
         let pub_key_to_id = HashMap::with_capacity(num_accounts);
         let id_to_account_info = HashMap::with_capacity(num_accounts);
         let merkle_root: AccRoot = account_merkle_tree.root();
-        let mut state = Self {
+        Self {
             next_available_account: Some(AccountId(1)),
             id_to_account_info,
             pub_key_to_id,
             parameters: parameters.clone(),
             merkle_tree: account_merkle_tree,
             merkle_root_history: vec![merkle_root],
-        };
+        }
+    }
+
+    /// Create an empty ledger that supports `num_accounts` accounts.
+    pub fn new_with_parameters(parameters: &Parameters) -> Self {
+        let mut state = Self::new_blank_state(parameters);
 
         state.register(sentinel_account());
         // TODO: fix this.
@@ -449,6 +458,12 @@ impl State {
     }
 }
 
+impl Default for State {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::SignedTransaction;
@@ -458,7 +473,7 @@ mod test {
     fn end_to_end() {
         let mut rng = ark_std::test_rng();
         let pp = Parameters::sample(&mut rng);
-        let mut state = State::new_with_parameters(32, &pp);
+        let mut state = State::new_with_parameters(&pp);
         // Let's make an account for Alice.
         let (alice_id, alice_pk, alice_sk) = state.sample_keys_and_register(&mut rng).unwrap();
         // Let's give her some initial balance to start with.
@@ -500,7 +515,7 @@ mod test {
     fn catchup_transactions() {
         let mut rng = ark_std::test_rng();
         let pp = Parameters::sample(&mut rng);
-        let mut state = State::new_with_parameters(32, &pp);
+        let mut state = State::new_with_parameters(&pp);
         let (alice_id, alice_pk, alice_sk) = state.sample_keys_and_register(&mut rng).unwrap();
         state
             .update_balance_by_id(&alice_id, Amount(10))

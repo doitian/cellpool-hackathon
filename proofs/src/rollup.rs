@@ -284,7 +284,7 @@ mod test {
     fn single_tx_validity_test() {
         let mut rng = ark_std::test_rng();
         let pp = Parameters::sample(&mut rng);
-        let mut state = State::new_with_parameters(32, &pp);
+        let mut state = State::new_with_parameters(&pp);
         // Let's make an account for Alice.
         let (alice_id, alice_pk, alice_sk) = state.sample_keys_and_register(&mut rng).unwrap();
         // Let's give her some initial balance to start with.
@@ -313,7 +313,7 @@ mod test {
     fn end_to_end() {
         let mut rng = ark_std::test_rng();
         let pp = Parameters::sample(&mut rng);
-        let mut state = State::new_with_parameters(32, &pp);
+        let mut state = State::new_with_parameters(&pp);
         // Let's make an account for Alice.
         let (alice_id, alice_pk, alice_sk) = state.sample_keys_and_register(&mut rng).unwrap();
         // Let's give her some initial balance to start with.
@@ -387,7 +387,7 @@ mod test {
         use ark_std::rand::Rng;
         let mut rng = ark_std::test_rng();
         let pp = Parameters::sample(&mut rng);
-        let mut state = State::new_with_parameters(32, &pp);
+        let mut state = State::new_with_parameters(&pp);
         // Let's make an account for Alice.
         let (alice_id, alice_pk, alice_sk) = state.sample_keys_and_register(&mut rng).unwrap();
         // Let's give her some initial balance to start with.
@@ -448,8 +448,7 @@ mod test {
     #[test]
     fn mint_assets() {
         let mut rng = ark_std::test_rng();
-        let pp = Parameters::sample(&mut rng);
-        let mut state = State::new_with_parameters(32, &pp);
+        let mut state = State::default();
         // Let's make an account for Alice.
         let (_alice_id, alice_pk, _alice_sk) = state.sample_keys_and_register(&mut rng).unwrap();
 
@@ -465,7 +464,7 @@ mod test {
     fn burn_assets() {
         let mut rng = ark_std::test_rng();
         let pp = Parameters::sample(&mut rng);
-        let mut state = State::new_with_parameters(32, &pp);
+        let mut state = State::new_with_parameters(&pp);
         // Let's make an account for Alice.
         let (alice_id, alice_pk, alice_sk) = state.sample_keys_and_register(&mut rng).unwrap();
         // Let's give her some initial balance to start with.
