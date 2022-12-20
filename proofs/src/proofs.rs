@@ -117,10 +117,10 @@ mod test {
     fn prove_and_verify_normal_transactions() {
         let (mut state, txs, signed_txs) = build_n_transactions(10, true);
 
-        let initial_root = state.root();
+        let initial_root = state.current_root();
         let proof = rollup_and_prove(&mut state, &signed_txs).expect("Must create proof");
 
-        let final_root = state.root();
+        let final_root = state.current_root();
         let is_valid_proof =
             verify(&proof, initial_root, final_root, &txs).expect("Must verify proof");
         assert!(is_valid_proof);

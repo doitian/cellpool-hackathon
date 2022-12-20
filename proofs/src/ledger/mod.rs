@@ -113,15 +113,14 @@ pub type AccPath = Path<MerkleConfig>;
 pub struct State {
     /// What is the next available account identifier?
     pub next_available_account: Option<AccountId>,
-    /// A merkle tree mapping where the i-th leaf corresponds to the i-th account's
-    /// information (= balance and public key).
-    pub account_merkle_tree: AccMerkleTree,
     /// A mapping from an account's identifier to its information (= balance and public key).
     pub id_to_account_info: HashMap<AccountId, AccountInformation>,
     /// A mapping from a public key to an account's identifier.
     pub pub_key_to_id: HashMap<schnorr::PublicKey<EdwardsProjective>, AccountId>,
     /// Parameters used for signature verification.
     pub parameters: Parameters,
+    /// Acccount Merkle tree history, used to track which batch of trasactions are applied.
+    pub merkle_tree_history: Vec<AccMerkleTree>,
 }
 
 impl State {
@@ -144,16 +143,30 @@ impl State {
         let id_to_account_info = HashMap::with_capacity(num_accounts);
         Self {
             next_available_account: Some(AccountId(1)),
-            account_merkle_tree,
             id_to_account_info,
             pub_key_to_id,
             parameters: parameters.clone(),
+            merkle_tree_history: vec![account_merkle_tree],
         }
     }
 
     /// Return the root of the account Merkle tree.
-    pub fn root(&self) -> AccRoot {
-        self.account_merkle_tree.root()
+    pub fn current_merkle_tree(&self) -> &AccMerkleTree {
+        self.merkle_tree_history
+            .last()
+            .expect("Merkle tree history will be non-empty upon state creation")
+    }
+
+    /// Return the root of the account Merkle tree.
+    pub(crate) fn current_merkle_tree_mut(&mut self) -> &mut AccMerkleTree {
+        self.merkle_tree_history
+            .last_mut()
+            .expect("Merkle tree history will be non-empty upon state creation")
+    }
+
+    /// Return the root of the account Merkle tree.
+    pub fn current_root(&self) -> AccRoot {
+        self.current_merkle_tree().root()
     }
 
     /// Create a new account with public key `pub_key`. Returns a fresh account identifier
@@ -169,7 +182,7 @@ impl State {
             };
             // Insert information into the relevant accounts.
             self.pub_key_to_id.insert(public_key, id);
-            self.account_merkle_tree
+            self.current_merkle_tree_mut()
                 .update(id.0 as usize, &account_info.to_bytes_le())
                 .expect("should exist");
             self.id_to_account_info.insert(id, account_info);
@@ -194,19 +207,26 @@ impl State {
     /// Update the balance of `id` to `new_amount`.
     /// Returns `Some(())` if an account with identifier `id` exists already, and `None`
     /// otherwise.
-    pub fn update_balance_by_id(&mut self, id: &AccountId, new_amount: Amount) -> Option<()> {
-        let tree = &mut self.account_merkle_tree;
-        self.id_to_account_info.get_mut(id).map(|account_info| {
-            account_info.balance = new_amount;
-            tree.update(id.0 as usize, &account_info.to_bytes_le())
-                .expect("should exist");
-        })
+    pub(crate) fn update_balance_by_id(
+        &mut self,
+        id: &AccountId,
+        new_amount: Amount,
+    ) -> Option<()> {
+        let id_to_account_info = &mut self.id_to_account_info;
+        let account_info = id_to_account_info.get_mut(id)?;
+        account_info.balance = new_amount;
+        let id = account_info.id.0 as usize;
+        let bytes = account_info.to_bytes_le();
+        self.current_merkle_tree_mut()
+            .update(id, &bytes)
+            .expect("Account must exist");
+        Some(())
     }
 
     /// Update the balance of `id` to `new_amount`.
     /// Returns `Some(())` if an account with identifier `id` exists already, and `None`
     /// otherwise.
-    pub fn update_balance_by_pk(
+    pub(crate) fn update_balance_by_pk(
         &mut self,
         pk: &AccountPublicKey,
         new_amount: Amount,
@@ -253,7 +273,7 @@ impl State {
     ) -> Option<Rollup> {
         let ledger_params = self.parameters.clone();
         let num_tx = transactions.len();
-        let initial_root = Some(self.root());
+        let initial_root = Some(self.current_root());
         let mut sender_pre_tx_info_and_paths = Vec::with_capacity(num_tx);
         let mut recipient_pre_tx_info_and_paths = Vec::with_capacity(num_tx);
         let mut sender_post_paths = Vec::with_capacity(num_tx);
@@ -269,25 +289,25 @@ impl State {
             let recipient_id = tx.recipient();
             let sender_pre_acc_info = self.get_account_information_from_pk(&sender_id)?;
             let sender_pre_path = self
-                .account_merkle_tree
+                .current_merkle_tree_mut()
                 .generate_proof(sender_pre_acc_info.id.0 as usize)
                 .unwrap();
             let recipient_pre_acc_info = self.get_account_information_from_pk(&recipient_id)?;
             let recipient_pre_path = self
-                .account_merkle_tree
+                .current_merkle_tree_mut()
                 .generate_proof(recipient_pre_acc_info.id.0 as usize)
                 .unwrap();
 
             if validate_transactions {
                 self.apply_transaction(tx)?;
             }
-            let post_tx_root = self.root();
+            let post_tx_root = self.current_root();
             let sender_post_path = self
-                .account_merkle_tree
+                .current_merkle_tree_mut()
                 .generate_proof(sender_pre_acc_info.id.0 as usize)
                 .unwrap();
             let recipient_post_path = self
-                .account_merkle_tree
+                .current_merkle_tree_mut()
                 .generate_proof(recipient_pre_acc_info.id.0 as usize)
                 .unwrap();
             sender_pre_tx_info_and_paths.push((sender_pre_acc_info, sender_pre_path));
@@ -300,7 +320,7 @@ impl State {
         Some(Rollup {
             ledger_params,
             initial_root,
-            final_root: Some(self.root()),
+            final_root: Some(self.current_root()),
             transactions: Some(transactions.iter().map(Into::into).collect()),
             signatures: Some(transactions.iter().map(|s| s.signature.clone()).collect()),
             sender_pre_tx_info_and_paths: Some(sender_pre_tx_info_and_paths),

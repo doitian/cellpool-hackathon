@@ -126,13 +126,13 @@ impl SignedTransaction {
             // Check that the account_info exists in the Merkle tree.
             result &= {
                 let path = state
-                    .account_merkle_tree
+                    .current_merkle_tree()
                     .generate_proof(sender_acc_info.id.0 as usize)
                     .expect("path should exist");
                 path.verify(
                     &state.parameters.leaf_crh_params,
                     &state.parameters.two_to_one_crh_params,
-                    &state.account_merkle_tree.root(),
+                    &state.current_root(),
                     &sender_acc_info.to_bytes_le(),
                 )
                 .unwrap()
