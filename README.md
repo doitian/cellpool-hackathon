@@ -32,3 +32,10 @@ pub struct CellPoolWitness {
     pub transactions: Vec<Vec<u8>>,
 }
 ```
+
+### Test
+
+```
+capsule build
+capsule test
+```

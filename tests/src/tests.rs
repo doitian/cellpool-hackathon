@@ -1,6 +1,6 @@
 use super::*;
 
-use ark_bls12_381::{Bls12_381, Fr};
+use ark_bls12_381::Bls12_381;
 use ark_groth16::Groth16;
 use ark_serialize::*;
 use ark_snark::SNARK;
@@ -75,11 +75,10 @@ fn test_success() {
         Groth16::<Bls12_381>::circuit_specific_setup(&circuit_to_verify_against, &mut rng).unwrap();
     let mut serialized_bytes = Vec::new();
     vk.serialize_uncompressed(&mut serialized_bytes).unwrap();
-    let vk1: <Groth16<Bls12_381> as SNARK<Fr>>::VerifyingKey = vk;
 
     // prepare scripts
     let lock_script = context
-        .build_script(&out_point, Bytes::from(serialized_bytes))
+        .build_script(&out_point, Bytes::from(serialized_bytes.clone()))
         .expect("script");
     let lock_script_dep = CellDep::new_builder().out_point(out_point).build();
 
@@ -94,22 +93,26 @@ fn test_success() {
     let input = CellInput::new_builder()
         .previous_output(input_out_point)
         .build();
-    let outputs = vec![
-        CellOutput::new_builder()
-            .capacity(500u64.pack())
-            .lock(lock_script.clone())
-            .build(),
-        CellOutput::new_builder()
-            .capacity(500u64.pack())
-            .lock(lock_script)
-            .build(),
-    ];
+    let outputs = vec![CellOutput::new_builder()
+        .capacity(1000u64.pack())
+        .lock(lock_script.clone())
+        .build()];
 
-    let outputs_data = vec![Bytes::new(); 2];
+    let outputs_data = vec![Bytes::from(serialized_bytes)];
+
+    let lock_witness = vec![0];
+    let witness = WitnessArgsBuilder::default()
+        .lock(
+            BytesOptBuilder::default()
+                .set(Some(lock_witness.pack()))
+                .build(),
+        )
+        .build();
 
     // build transaction
     let tx = TransactionBuilder::default()
         .input(input)
+        .witness(witness.as_bytes().pack())
         .outputs(outputs)
         .outputs_data(outputs_data.pack())
         .cell_dep(lock_script_dep)
@@ -147,18 +150,12 @@ fn test_empty_args() {
     let input = CellInput::new_builder()
         .previous_output(input_out_point)
         .build();
-    let outputs = vec![
-        CellOutput::new_builder()
-            .capacity(500u64.pack())
-            .lock(lock_script.clone())
-            .build(),
-        CellOutput::new_builder()
-            .capacity(500u64.pack())
-            .lock(lock_script)
-            .build(),
-    ];
+    let outputs = vec![CellOutput::new_builder()
+        .capacity(1000u64.pack())
+        .lock(lock_script.clone())
+        .build()];
 
-    let outputs_data = vec![Bytes::new(); 2];
+    let outputs_data = vec![Bytes::new()];
 
     // build transaction
     let tx = TransactionBuilder::default()
