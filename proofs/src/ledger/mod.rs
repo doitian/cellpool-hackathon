@@ -290,7 +290,16 @@ impl State {
     pub fn rollup_transactions(
         &self,
         transactions: &[SignedTransaction],
+        create_non_existent_accounts: bool,
+    ) -> Option<(Self, Rollup)> {
+        self.do_rollup_transactions(transactions, create_non_existent_accounts, true)
+    }
+
+    pub(crate) fn do_rollup_transactions(
+        &self,
+        transactions: &[SignedTransaction],
         _create_non_existent_accounts: bool,
+        validate_transactions: bool, // When set, only generating a not working rollup, useful for testing.
     ) -> Option<(Self, Rollup)> {
         let mut temp_state = self.clone();
         let num_tx = transactions.len();
@@ -316,7 +325,7 @@ impl State {
                 .generate_proof(recipient_pre_acc_info.id.0 as usize)
                 .expect("Already validated transaction above");
 
-            if !temp_state.apply_transaction(tx) {
+            if validate_transactions && !temp_state.apply_transaction(tx) {
                 return None;
             }
 
@@ -360,72 +369,6 @@ impl State {
             self.rollup_transactions(transactions, create_non_existent_accounts)?;
         *self = temp_state;
         Some(rollup)
-    }
-
-    // Expose the validate_transactions parameter for testing.
-    pub(crate) fn do_rollup_transactions_mut(
-        &mut self,
-        transactions: &[SignedTransaction],
-        validate_transactions: bool,
-        _create_non_existent_accounts: bool,
-    ) -> Option<Rollup> {
-        if validate_transactions && !self.validate_transactions(transactions) {
-            return None;
-        }
-        let num_tx = transactions.len();
-        let initial_root = Some(self.current_root());
-        let ledger_params = self.parameters.clone();
-        let mut sender_pre_tx_info_and_paths = Vec::with_capacity(num_tx);
-        let mut recipient_pre_tx_info_and_paths = Vec::with_capacity(num_tx);
-        let mut sender_post_paths = Vec::with_capacity(num_tx);
-        let mut recipient_post_paths = Vec::with_capacity(num_tx);
-        let mut post_tx_roots = Vec::with_capacity(num_tx);
-        for tx in transactions {
-            let sender_id = tx.sender();
-            let recipient_id = tx.recipient();
-            let sender_pre_acc_info = self.get_account_information_from_pk(&sender_id)?;
-            let sender_pre_path = self
-                .current_merkle_tree()
-                .generate_proof(sender_pre_acc_info.id.0 as usize)
-                .expect("Already validated transaction above");
-            let recipient_pre_acc_info = self.get_account_information_from_pk(&recipient_id)?;
-            let recipient_pre_path = self
-                .current_merkle_tree_mut()
-                .generate_proof(recipient_pre_acc_info.id.0 as usize)
-                .expect("Already validated transaction above");
-
-            if validate_transactions {
-                self.unsafe_apply_transaction(tx);
-            }
-
-            let post_tx_root = self.current_root();
-            let sender_post_path = self
-                .current_merkle_tree()
-                .generate_proof(sender_pre_acc_info.id.0 as usize)
-                .expect("Already validated transaction above");
-            let recipient_post_path = self
-                .current_merkle_tree()
-                .generate_proof(recipient_pre_acc_info.id.0 as usize)
-                .expect("Already validated transaction above");
-            sender_pre_tx_info_and_paths.push((sender_pre_acc_info, sender_pre_path));
-            recipient_pre_tx_info_and_paths.push((recipient_pre_acc_info, recipient_pre_path));
-            sender_post_paths.push(sender_post_path);
-            recipient_post_paths.push(recipient_post_path);
-            post_tx_roots.push(post_tx_root);
-        }
-
-        Some(Rollup {
-            ledger_params,
-            initial_root,
-            final_root: Some(self.current_root()),
-            transactions: Some(transactions.iter().map(Into::into).collect()),
-            signatures: Some(transactions.iter().map(|s| s.signature.clone()).collect()),
-            sender_pre_tx_info_and_paths: Some(sender_pre_tx_info_and_paths),
-            recv_pre_tx_info_and_paths: Some(recipient_pre_tx_info_and_paths),
-            sender_post_paths: Some(sender_post_paths),
-            recv_post_paths: Some(recipient_post_paths),
-            post_tx_roots: Some(post_tx_roots),
-        })
     }
 }
 

@@ -1,5 +1,4 @@
 use crate::account::AccountInformationVar;
-use crate::ledger::*;
 use crate::random_oracle::blake2s::constraints::ROGadget;
 use crate::random_oracle::blake2s::RO;
 use crate::random_oracle::constraints::RandomOracleGadget;
@@ -10,6 +9,7 @@ use crate::{
     account::AccountInformation,
     ledger::{AccPath, AccRoot, Parameters},
 };
+use crate::{ledger::*, SignedTransaction};
 use ark_r1cs_std::prelude::*;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
@@ -92,6 +92,13 @@ impl Rollup {
             recv_post_paths: None,
             post_tx_roots: None,
         }
+    }
+
+    pub fn with_state_and_transactions(state: &State, transactions: &[SignedTransaction]) -> Self {
+        state
+            .do_rollup_transactions(transactions, true, false)
+            .expect("Transactions are not validated, must generate rollup")
+            .1
     }
 }
 
@@ -286,19 +293,14 @@ mod test {
         let tx1 = SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(5), &alice_sk, &mut rng);
         assert!(tx1.validate(&temp_state));
         let rollup = temp_state.rollup_transactions_mut(&[tx1], true).unwrap();
-        dbg!("transferred");
         assert!(test_cs(rollup));
-        dbg!("transferred");
 
         let mut temp_state = state.clone();
         let bad_tx = SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(5), &bob_sk, &mut rng);
         assert!(!bad_tx.validate(&temp_state));
         assert!(!temp_state.apply_transaction(&bad_tx));
-        let rollup = temp_state
-            .do_rollup_transactions_mut(&[bad_tx.clone()], false, true)
-            .unwrap();
+        let rollup = Rollup::with_state_and_transactions(&temp_state, &[bad_tx.clone()]);
         assert!(!test_cs(rollup));
-        dbg!("transferred");
     }
 
     #[test]
@@ -349,9 +351,7 @@ mod test {
             SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(21), &alice_sk, &mut rng);
         assert!(!bad_tx.validate(&temp_state));
         assert!(!temp_state.apply_transaction(&bad_tx));
-        let rollup = temp_state
-            .do_rollup_transactions_mut(&[bad_tx.clone()], false, true)
-            .unwrap();
+        let rollup = Rollup::with_state_and_transactions(&temp_state, &[bad_tx.clone()]);
         assert!(!test_cs(rollup));
 
         // Next, let's try a transaction where the signature is incorrect:
@@ -359,9 +359,7 @@ mod test {
         let bad_tx = SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(5), &bob_sk, &mut rng);
         assert!(!bad_tx.validate(&temp_state));
         assert!(!temp_state.apply_transaction(&bad_tx));
-        let rollup = temp_state
-            .do_rollup_transactions_mut(&[bad_tx.clone()], false, true)
-            .unwrap();
+        let rollup = Rollup::with_state_and_transactions(&temp_state, &[bad_tx.clone()]);
         assert!(!test_cs(rollup));
 
         // Finally, let's try a transaction to an non-existant account:
