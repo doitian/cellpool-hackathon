@@ -61,7 +61,7 @@ impl Amount {
 }
 
 /// The parameters that are used in transaction creation and validation.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Parameters {
     pub sig_params: schnorr::Parameters<EdwardsProjective>,
     pub leaf_crh_params: <TwoToOneHash as CRH>::Parameters,
@@ -83,6 +83,12 @@ impl Parameters {
     pub fn unsecure_hardcoded_parameters() -> Self {
         let mut rng = ark_std::test_rng();
         Self::sample(&mut rng)
+    }
+}
+
+impl Default for Parameters {
+    fn default() -> Self {
+        Self::unsecure_hardcoded_parameters()
     }
 }
 

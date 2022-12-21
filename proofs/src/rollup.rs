@@ -23,35 +23,34 @@ pub struct Rollup {
     #[serde(skip)]
     pub ledger_params: Parameters,
     /// The Merkle tree root before applying this batch of transactions.
-    #[serde_as(as = "SerdeAsHex")]
+    #[serde_as(as = "Option<SerdeAsHex>")]
     pub initial_root: Option<AccRoot>,
     /// The Merkle tree root after applying this batch of transactions.
-    #[serde_as(as = "SerdeAsHex")]
+    #[serde_as(as = "Option<SerdeAsHex>")]
     pub final_root: Option<AccRoot>,
     /// The current batch of transactions.
-    #[serde_as(as = "SerdeAsHex")]
     pub transactions: Option<Vec<Transaction>>,
     /// The current batch of transactions.
     pub signatures: Option<Vec<Signature>>,
     /// The sender's account information and corresponding authentication path,
     /// *before* applying the transactions.
-    #[serde_as(as = "SerdeAsHex")]
+    #[serde_as(as = "Option<Vec<(_,SerdeAsHex)>>")]
     pub sender_pre_tx_info_and_paths: Option<Vec<(AccountInformation, AccPath)>>,
     /// The authentication path corresponding to the sender's account information
     /// *after* applying the transactions.
-    #[serde_as(as = "SerdeAsHex")]
+    #[serde_as(as = "Option<Vec<SerdeAsHex>>")]
     pub sender_post_paths: Option<Vec<AccPath>>,
     /// The recipient's account information and corresponding authentication path,
     /// *before* applying the transactions.
-    #[serde_as(as = "SerdeAsHex")]
+    #[serde_as(as = "Option<Vec<(_,SerdeAsHex)>>")]
     pub recv_pre_tx_info_and_paths: Option<Vec<(AccountInformation, AccPath)>>,
     /// The authentication path corresponding to the recipient's account information
     /// *after* applying the transactions.
-    #[serde_as(as = "SerdeAsHex")]
+    #[serde_as(as = "Option<Vec<SerdeAsHex>>")]
     pub recv_post_paths: Option<Vec<AccPath>>,
     /// List of state roots, so that the i-th root is the state root after applying
     /// the i-th transaction. This means that `post_tx_roots[NUM_TX - 1] == final_root`.
-    #[serde_as(as = "SerdeAsHex")]
+    #[serde_as(as = "Option<Vec<SerdeAsHex>>")]
     pub post_tx_roots: Option<Vec<AccRoot>>,
 }
 
