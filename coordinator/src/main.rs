@@ -2,13 +2,26 @@ use actix_web::web::Json;
 use actix_web::{error, get, post, web, App, HttpResponse, HttpServer, Responder};
 use cellpool_proofs::ledger::StateError;
 use cellpool_proofs::rollup::Rollup;
-use cellpool_proofs::SignedTransaction;
-use cellpool_proofs::State;
+use cellpool_proofs::{
+    generate_proof_from_rollup, rollup_and_prove, rollup_and_prove_mut, ProofError, State,
+};
+use cellpool_proofs::{Proof, SignedTransaction};
+use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 
 #[get("/")]
 async fn hello() -> impl Responder {
     HttpResponse::Ok().body("Hello world!")
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Parameters {
+    commit: Option<bool>,
+}
+impl Parameters {
+    fn should_commit(&self) -> bool {
+        Some(true) == self.commit
+    }
 }
 
 struct StateData {
@@ -43,11 +56,24 @@ async fn create_transaction_handler(
 }
 
 #[get("/rollup")]
-async fn rollup_handler(data: web::Data<StateData>) -> Result<Json<Rollup>, actix_web::Error> {
+async fn rollup_handler(
+    data: web::Data<StateData>,
+    parameters: web::Query<Parameters>,
+) -> Result<Json<(State, Rollup)>, actix_web::Error> {
     let mut uncommitted_transactions = data.uncommitted_transactions.lock().unwrap();
     let mut state = data.state.lock().unwrap();
-    let result = state.rollup_transactions_mut(&uncommitted_transactions, false);
-    *uncommitted_transactions = vec![];
+    let result = if parameters.should_commit() {
+        state
+            .rollup_transactions_mut(&uncommitted_transactions, false)
+            .map(|rollup| (state.clone(), rollup))
+    } else {
+        state.rollup_transactions(&uncommitted_transactions, false)
+    };
+    // Maybe we also need to delete bad transaction on error, lest they hang out there
+    // forever.
+    if parameters.should_commit() {
+        *uncommitted_transactions = vec![];
+    }
     result
         .map(Json)
         .map_err(|err| error::ErrorBadRequest(err.to_string()))
@@ -56,10 +82,25 @@ async fn rollup_handler(data: web::Data<StateData>) -> Result<Json<Rollup>, acti
 #[post("/rollup_transactions")]
 async fn rollup_transactions_handler(
     data: web::Data<StateData>,
+    parameters: web::Query<Parameters>,
     transactions: Json<Vec<SignedTransaction>>,
-) -> Result<Json<Rollup>, actix_web::Error> {
+) -> Result<Json<(State, Proof)>, actix_web::Error> {
     let mut state = data.state.lock().unwrap();
-    let result = state.rollup_transactions_mut(&transactions, false);
+    let result = if parameters.should_commit() {
+        rollup_and_prove_mut(&mut state, &transactions).map(|rollup| (state.clone(), rollup))
+    } else {
+        rollup_and_prove(&state, &transactions)
+    };
+    result
+        .map(Json)
+        .map_err(|err| error::ErrorBadRequest(err.to_string()))
+}
+
+#[post("/generate_proof_from_rollup")]
+async fn generate_proof_from_rollup_handler(
+    rollup: Json<Rollup>,
+) -> Result<Json<Proof>, actix_web::Error> {
+    let result = generate_proof_from_rollup(&rollup);
     result
         .map(Json)
         .map_err(|err| error::ErrorBadRequest(err.to_string()))
@@ -103,6 +144,7 @@ async fn main() -> std::io::Result<()> {
             .service(create_transaction_handler)
             .service(rollup_transactions_handler)
             .service(rollup_handler)
+            .service(generate_proof_from_rollup_handler)
             .app_data(app_state.clone()) // <- register the created data
     })
     .bind(("127.0.0.1", 5060))?

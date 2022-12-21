@@ -1,4 +1,5 @@
 use crate::ledger::{AccRoot, State, StateError};
+use crate::rollup::Rollup;
 use crate::serde::SerdeAsBase64;
 
 use crate::transaction::{get_transactions_hash, SignedTransaction, Transaction};
@@ -30,7 +31,7 @@ pub enum ProofError {
     ProvingEngine(ark_relations::r1cs::SynthesisError),
 }
 
-pub fn rollup_and_prove(
+pub fn rollup_and_prove_mut(
     state: &mut State,
     transactions: &[SignedTransaction],
 ) -> Result<Proof, ProofError> {
@@ -38,11 +39,23 @@ pub fn rollup_and_prove(
         .rollup_transactions_mut(transactions, true)
         .map_err(ProofError::Rollup)?;
 
+    generate_proof_from_rollup(&rollup)
+}
+
+pub fn rollup_and_prove(
+    state: &State,
+    transactions: &[SignedTransaction],
+) -> Result<(State, Proof), ProofError> {
+    let mut temp_state = state.clone();
+    rollup_and_prove_mut(&mut temp_state, transactions).map(|proof| (temp_state, proof))
+}
+
+pub fn generate_proof_from_rollup(rollup: &Rollup) -> Result<Proof, ProofError> {
     let mut rng = ark_std::test_rng();
-    let (pk, vk) = Groth16::<Bls12_381>::circuit_specific_setup(&rollup, &mut rng)
+    let (pk, vk) = Groth16::<Bls12_381>::circuit_specific_setup(rollup, &mut rng)
         .map_err(ProofError::ProvingEngine)?;
 
-    let proof = Groth16::prove(&pk, &rollup, &mut rng).map_err(ProofError::ProvingEngine)?;
+    let proof = Groth16::prove(&pk, rollup, &mut rng).map_err(ProofError::ProvingEngine)?;
     Ok(Proof { proof, vk })
 }
 
@@ -126,7 +139,7 @@ mod test {
         let (mut state, txs, signed_txs) = build_n_transactions(10, true);
 
         let initial_root = state.current_root();
-        let proof = rollup_and_prove(&mut state, &signed_txs).expect("Must create proof");
+        let proof = rollup_and_prove_mut(&mut state, &signed_txs).expect("Must create proof");
 
         let final_root = state.current_root();
         let is_valid_proof =
@@ -138,7 +151,7 @@ mod test {
     fn prove_generation_on_illegal_transactions() {
         let (mut state, _txs, signed_txs) = build_n_transactions(5, false);
 
-        let proof = rollup_and_prove(&mut state, &signed_txs);
+        let proof = rollup_and_prove_mut(&mut state, &signed_txs);
         assert!(proof.is_err());
     }
 }

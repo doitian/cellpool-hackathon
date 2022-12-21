@@ -9,4 +9,5 @@ edition = "2021"
 actix-web = "4.2.1"
 cellpool-proofs = { path = "../proofs", default-features = true }
 derivative = "2.2.0"
+serde = "1.0.151"
 serde_json = "1.0.91"
