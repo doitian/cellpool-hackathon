@@ -1,23 +1,34 @@
 use actix_web::web::Json;
-use actix_web::{error, get, post, web, App, HttpResponse, HttpServer, Responder};
-use cellpool_proofs::ledger::StateError;
+use actix_web::{error, get, post, web, App, HttpServer};
 use cellpool_proofs::rollup::Rollup;
+use cellpool_proofs::serde::SerdeAsHex;
 use cellpool_proofs::{
-    generate_proof_from_rollup, rollup_and_prove, rollup_and_prove_mut, ProofError, State,
+    generate_proof_from_rollup, get_transactions_hash, rollup_and_prove, rollup_and_prove_mut,
+    verify_proof_with_transactions_hash, AccRoot, State, Transaction,
 };
 use cellpool_proofs::{Proof, SignedTransaction};
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use std::sync::Mutex;
-
-#[get("/")]
-async fn hello() -> impl Responder {
-    HttpResponse::Ok().body("Hello world!")
-}
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Parameters {
     commit: Option<bool>,
 }
+
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize)]
+struct ProofResult {
+    proof: Proof,
+    #[serde_as(as = "SerdeAsHex")]
+    initial_root: AccRoot,
+    #[serde_as(as = "SerdeAsHex")]
+    final_root: AccRoot,
+    #[serde_as(as = "Option<serde_with::hex::Hex>")]
+    transactions_hash: Option<[u8; 32]>,
+    transactions: Option<Vec<Transaction>>,
+}
+
 impl Parameters {
     fn should_commit(&self) -> bool {
         Some(true) == self.commit
@@ -99,8 +110,36 @@ async fn rollup_transactions_handler(
 #[post("/generate_proof_from_rollup")]
 async fn generate_proof_from_rollup_handler(
     rollup: Json<Rollup>,
-) -> Result<Json<Proof>, actix_web::Error> {
+) -> Result<Json<ProofResult>, actix_web::Error> {
     let result = generate_proof_from_rollup(&rollup);
+    result
+        .map(|proof| ProofResult {
+            proof,
+            initial_root: rollup.initial_root.unwrap(),
+            final_root: rollup.final_root.unwrap(),
+            transactions_hash: Some(get_transactions_hash(rollup.transactions.as_ref().unwrap())),
+            transactions: rollup.transactions.clone(),
+        })
+        .map(Json)
+        .map_err(|err| error::ErrorBadRequest(err.to_string()))
+}
+
+#[post("/verify_proof")]
+async fn verify_proof_handler(proof: Json<ProofResult>) -> Result<Json<bool>, actix_web::Error> {
+    let transactions_hash: Option<[u8; 32]> = proof.transactions_hash.or(proof
+        .transactions
+        .as_ref()
+        .map(|t| get_transactions_hash(t)));
+    if transactions_hash.is_none() {
+        return Err(error::ErrorBadRequest("Transactions hash not given"));
+    }
+    let transactions_hash = transactions_hash.unwrap();
+    let result = verify_proof_with_transactions_hash(
+        &proof.proof,
+        &proof.initial_root,
+        &proof.final_root,
+        &transactions_hash,
+    );
     result
         .map(Json)
         .map_err(|err| error::ErrorBadRequest(err.to_string()))
@@ -145,14 +184,10 @@ async fn main() -> std::io::Result<()> {
             .service(rollup_transactions_handler)
             .service(rollup_handler)
             .service(generate_proof_from_rollup_handler)
+            .service(verify_proof_handler)
             .app_data(app_state.clone()) // <- register the created data
     })
     .bind(("127.0.0.1", 5060))?
     .run()
     .await
 }
-
-// Initialize state
-// Catchup
-// rollup
-// verify

@@ -631,6 +631,7 @@ dependencies = [
  "derivative",
  "serde",
  "serde_json",
+ "serde_with",
 ]
 
 [[package]]

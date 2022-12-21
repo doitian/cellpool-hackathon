@@ -2,7 +2,7 @@ use crate::account::{sentinel_account, AccountInformationVar, AccountPublicKeyVa
 use crate::random_oracle::blake2s::constraints::ROGadget;
 use crate::random_oracle::blake2s::RO;
 use crate::random_oracle::constraints::RandomOracleGadget;
-use crate::serde::{BigUintAsHex, SerdeAsBase64, SerdeAsHex};
+use crate::serde::SerdeAsHex;
 use crate::signature::{Signature, SignatureVar};
 use crate::transaction::{get_transactions_hash, Transaction, TransactionVar};
 use crate::ConstraintF;
@@ -13,7 +13,7 @@ use crate::{
 use crate::{ledger::*, SignedTransaction};
 use ark_r1cs_std::prelude::*;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
 #[serde_as]
@@ -82,8 +82,8 @@ impl Rollup {
 
     pub fn must_get_public_inputs(&self) -> Vec<ConstraintF> {
         crate::get_public_inputs(
-            self.initial_root.unwrap(),
-            self.final_root.unwrap(),
+            &self.initial_root.unwrap(),
+            &self.final_root.unwrap(),
             self.transactions.as_ref().unwrap(),
         )
     }
@@ -392,6 +392,7 @@ mod test {
         );
         assert!(!bad_tx.validate(&state, true));
         assert!(!temp_state.apply_transaction(&bad_tx, true));
+        println!("{}", serde_json::to_string_pretty(&bad_tx).unwrap());
     }
 
     // Builds a circuit with two txs, using different pubkeys & amounts every time.

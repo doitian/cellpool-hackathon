@@ -59,30 +59,51 @@ pub fn generate_proof_from_rollup(rollup: &Rollup) -> Result<Proof, ProofError> 
     Ok(Proof { proof, vk })
 }
 
-pub fn verify(
+pub fn verify_proof_with_transactions(
     proof: &Proof,
-    initial_root: AccRoot,
-    final_root: AccRoot,
+    initial_root: &AccRoot,
+    final_root: &AccRoot,
     transactions: &[Transaction],
 ) -> Result<bool, ProofError> {
     let public_inputs = get_public_inputs(initial_root, final_root, transactions);
     Groth16::verify(&proof.vk, &public_inputs, &proof.proof).map_err(ProofError::ProvingEngine)
 }
 
-pub(crate) fn get_public_inputs(
-    initial_root: AccRoot,
-    final_root: AccRoot,
-    transactions: &[Transaction],
+pub fn verify_proof_with_transactions_hash(
+    proof: &Proof,
+    initial_root: &AccRoot,
+    final_root: &AccRoot,
+    transactions_hash: &[u8; 32],
+) -> Result<bool, ProofError> {
+    let public_inputs =
+        get_public_inputs_from_transactions_hash(initial_root, final_root, transactions_hash);
+    Groth16::verify(&proof.vk, &public_inputs, &proof.proof).map_err(ProofError::ProvingEngine)
+}
+
+pub(crate) fn get_public_inputs_from_transactions_hash(
+    initial_root: &AccRoot,
+    final_root: &AccRoot,
+    transactions_hash: &[u8; 32],
 ) -> Vec<ConstraintF> {
     use ark_ff::ToConstraintField;
-    let transaction_fields: Vec<ConstraintF> = get_transactions_hash(transactions)
-        .to_field_elements()
-        .unwrap();
+    let transaction_fields: Vec<ConstraintF> = transactions_hash.to_field_elements().unwrap();
     let mut result = Vec::with_capacity(transaction_fields.len() + 2);
-    result.push(initial_root);
-    result.push(final_root);
+    result.push(initial_root.clone());
+    result.push(final_root.clone());
     result.extend(transaction_fields);
     result
+}
+
+pub(crate) fn get_public_inputs(
+    initial_root: &AccRoot,
+    final_root: &AccRoot,
+    transactions: &[Transaction],
+) -> Vec<ConstraintF> {
+    get_public_inputs_from_transactions_hash(
+        initial_root,
+        final_root,
+        &get_transactions_hash(transactions),
+    )
 }
 
 #[cfg(test)]
@@ -143,7 +164,8 @@ mod test {
 
         let final_root = state.current_root();
         let is_valid_proof =
-            verify(&proof, initial_root, final_root, &txs).expect("Must verify proof");
+            verify_proof_with_transactions_hash(&proof, &initial_root, &final_root, &txs)
+                .expect("Must verify proof");
         assert!(is_valid_proof);
     }
 

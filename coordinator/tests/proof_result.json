@@ -1,0 +1,23 @@
+{
+  "proof": {
+    "proof": "FOcSEwDNhyASMVNl7MgzyLyRlrXGLXP2PHwRHmjSFdC4THNE0DA1FkoNyV4yj2QXaz0N1o3Zh+LzmwVipC5zT/1HVGfGlG6UCMvatdlofrDjz/y+oY/cmhYUpRw1dhoQzydTl2MjKF4NV7rj8M95FcAUoJ3DFOMrkqRLMCZFTcx4wiiW8dDaDIVNnBMJ6akASQjyvos2z2a97oLpDl8LMONphBpy3drISl9GipyJT+US2FoHSqH1n8k2ZUcntTqR",
+    "vk": "FVFefoG/vHtjLWHEkp55YGpnPufYT+/kes6bUy8fcLhPGVbW/zNgGLlZdgdDqVEC7BkSMaNioR0IEY4xtHuGGCWJg5ekCzxCKo3X/uKdHpr9WcsB8jbD9uSZ3Hu9h0UVMhaLKoSomkxHaavZGG5B/1QaASOYaERQGh4p2YmVerw++IsGEefjoDx8dXYryJiKDM/pQY0xKk8JzOve7mnUrk+BkBbh3oDRikyJznhZSwsR+gvju4d4w1EsTRATvPoKaZ3joeOChegBXtjnNQNPeSRmC/udp7U5cosdNtM6s22kPLE+reuHG/xGEhU3jcKN4a0Kz72o1fXyHP27FAOktJnD0WJ6TZGCvLdmkRHHQGv2YZAC9Fl3QcHA54uPaMYDRan/LwdQBTLVXy4Mk8A4BPrcveHcaOj7lnb3V4COKSBLkcKYwrEPrQJQc/Iur8CZBQAAAAAAAABqjuh3SUu3n80QNSFTj7zZg3AAuAObsC7KX90tQ2XPZE5Xx4zzN31ciYthOpD3Ipgmn67xxt0354y8N2a280lPI+3S3u5sOStFSiCncpNTI1RV9VZoujUVSMuTsTrE2xUdGKTfoB1p0Lc0BpN7hmm3ftJxz2jfvKX+Xxt9xlpUw4DwB01TYtPHalGxWV2pKgNAU4HVeIKE62KFNDToOohnkjcfE9HsePyVyq+peo/zhCNIuh2p9gzFvh8CuYL5AQbsZB/pRaa6xK2Mub8jiC/j4TD4po8pe7y3gHngwawcIgavkPQ30lTeXNlD9zN0Ahg="
+  },
+  "initial_root": "43c0b4e4b9c44ab78831c363c047408fbd9ff6cbbbd9db33046fdafcafd94859",
+  "final_root": "a354f92a6772ca9f6dcd35ed9c8c4a4ef0e0866e658c34bb3f818c2d6ea71839",
+  "transactions_hash": "5080bbe2dc1d3feefe8e95794670cf593ed19dae172f1242338eec18b4ac6c18",
+  "transactions": [
+    {
+      "sender": "24d00ecdb96c97df68d2cbc8e5b92d2f766f64ac209df473347e4973da62d337",
+      "recipient": "6502b9fe0ff15d22b88638040af8cac3399177c2c7438184c669bddc7fa7a9be",
+      "amount": 5,
+      "fee": 0
+    },
+    {
+      "sender": "24d00ecdb96c97df68d2cbc8e5b92d2f766f64ac209df473347e4973da62d337",
+      "recipient": "6502b9fe0ff15d22b88638040af8cac3399177c2c7438184c669bddc7fa7a9be",
+      "amount": 21,
+      "fee": 0
+    }
+  ]
+}
