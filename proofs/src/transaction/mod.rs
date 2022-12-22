@@ -1,4 +1,5 @@
-use crate::account::get_public_key_bytes;
+use crate::account::{get_public_key_bytes, sentinel_account};
+use crate::serde::SerdeAsHex;
 use crate::signature::Signature;
 
 use crate::random_oracle::blake2s::RO;
@@ -14,22 +15,31 @@ use ark_ed_on_bls12_381::EdwardsProjective;
 use ark_serialize::*;
 use ark_std::rand::Rng;
 
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
+
 #[cfg(feature = "r1cs")]
 pub mod constraints;
 #[cfg(feature = "r1cs")]
 pub use constraints::*;
 
 /// Transaction transferring some amount from one account to another.
-#[derive(Copy, Clone, Debug, PartialEq, CanonicalSerialize, CanonicalDeserialize)]
+#[serde_as]
+#[derive(
+    Copy, Clone, Debug, PartialEq, CanonicalSerialize, CanonicalDeserialize, Serialize, Deserialize,
+)]
 pub struct Transaction {
     /// The account information of the sender.
+    #[serde_as(as = "SerdeAsHex")]
     pub sender: AccountPublicKey,
     /// The account information of the recipient.
+    #[serde_as(as = "SerdeAsHex")]
     pub recipient: AccountPublicKey,
     /// The amount being transferred from the sender to the receiver.
     pub amount: Amount,
     /// The fee being collected by the miner.
     pub fee: Amount,
+    // TODO: add nonce to prevent replay attacks.
 }
 
 impl Transaction {
@@ -63,7 +73,7 @@ pub fn get_transactions_hash(transactions: &[Transaction]) -> [u8; 32] {
 }
 
 /// Transaction transferring some amount from one account to another.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SignedTransaction {
     transaction: Transaction,
     /// The spend authorization is a signature over the sender, the recipient,
@@ -80,6 +90,21 @@ impl From<SignedTransaction> for Transaction {
 impl From<&SignedTransaction> for Transaction {
     fn from(signed_transaction: &SignedTransaction) -> Transaction {
         signed_transaction.transaction
+    }
+}
+
+impl From<Transaction> for SignedTransaction {
+    fn from(transaction: Transaction) -> SignedTransaction {
+        (&transaction).into()
+    }
+}
+
+impl From<&Transaction> for SignedTransaction {
+    fn from(transaction: &Transaction) -> SignedTransaction {
+        SignedTransaction {
+            transaction: *transaction,
+            signature: Signature::default(),
+        }
     }
 }
 
@@ -119,28 +144,33 @@ impl SignedTransaction {
     /// 2. Verify that the sender's account has sufficient balance to finance
     /// the transaction.
     /// 3. Verify that the recipient's account exists.
-    pub fn validate(&self, state: &ledger::State) -> bool {
+    pub fn validate(&self, state: &ledger::State, valid_signature: bool) -> bool {
+        // Minting assets are verified else where
+        if self.is_minting_transaction() {
+            return true;
+        }
         // Lookup public key corresponding to sender ID
         if let Some(sender_acc_info) = state.get_account_information_from_pk(&self.sender()) {
             let mut result = true;
             // Check that the account_info exists in the Merkle tree.
             result &= {
                 let path = state
-                    .account_merkle_tree
+                    .current_merkle_tree()
                     .generate_proof(sender_acc_info.id.0 as usize)
                     .expect("path should exist");
                 path.verify(
                     &state.parameters.leaf_crh_params,
                     &state.parameters.two_to_one_crh_params,
-                    &state.account_merkle_tree.root(),
+                    &state.current_root(),
                     &sender_acc_info.to_bytes_le(),
                 )
                 .unwrap()
             };
-            // Verify the signature against the sender pubkey.
-            result &=
-                self.verify_signature(&state.parameters.sig_params, &sender_acc_info.public_key);
-            // assert!(result, "signature verification failed");
+            if valid_signature {
+                // Verify the signature against the sender pubkey.
+                result &= self
+                    .verify_signature(&state.parameters.sig_params, &sender_acc_info.public_key);
+            }
             // Verify the amount is available in the sender account.
             result &= self.amount() <= sender_acc_info.balance;
             // Verify that recipient account exists.
@@ -170,6 +200,43 @@ impl SignedTransaction {
             transaction,
             signature,
         }
+    }
+
+    /// Create a transaction to burn assets.
+    pub fn burn<R: Rng>(
+        parameters: &ledger::Parameters,
+        sender: AccountPublicKey,
+        amount: Amount,
+        sender_sk: &AccountSecretKey,
+        rng: &mut R,
+    ) -> Self {
+        // The authorized message consists of (SenderAccId || RecipientAccId || Amount)
+        let transaction = Transaction::new(sender, sentinel_account(), amount);
+        let message = transaction.to_bytes_le();
+        let signature = Schnorr::sign(&parameters.sig_params, sender_sk, &message, rng).unwrap();
+        Self {
+            transaction,
+            signature,
+        }
+    }
+
+    /// Create a transaction to burn assets.
+    pub fn mint(recipient: AccountPublicKey, amount: Amount) -> Self {
+        // The authorized message consists of (SenderAccId || RecipientAccId || Amount)
+        let transaction = Transaction::new(sentinel_account(), recipient, amount);
+        let signature = Signature::default();
+        Self {
+            transaction,
+            signature,
+        }
+    }
+
+    pub fn is_burning_transaction(&self) -> bool {
+        self.recipient() == sentinel_account()
+    }
+
+    pub fn is_minting_transaction(&self) -> bool {
+        self.sender() == sentinel_account()
     }
 }
 

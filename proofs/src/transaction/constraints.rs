@@ -80,6 +80,7 @@ impl TransactionVar {
     )]
     pub fn validate(
         &self,
+        sentinel_pk: &AccountPublicKeyVar,
         parameters: &ledger::ParametersVar,
         signature: &SignatureVar,
         pre_sender_acc_info: &AccountInformationVar,
@@ -92,6 +93,8 @@ impl TransactionVar {
         post_root: &AccRootVar,
     ) -> Result<Boolean<ConstraintF>, SynthesisError> {
         // Verify the signature against the sender pubkey.
+        let is_minting: Boolean<ConstraintF> = pre_sender_acc_info.public_key.is_eq(sentinel_pk)?;
+
         let sig_verifies = self.verify_signature(
             &parameters.sig_params,
             &pre_sender_acc_info.public_key,
@@ -138,11 +141,20 @@ impl TransactionVar {
             &post_recipient_acc_info,
         )?;
 
-        sender_exists
+        let sender_recipient_different = (pre_sender_acc_info
+            .public_key
+            .is_neq(&pre_recipient_acc_info.public_key))?;
+        let good_normal_transaction: Boolean<ConstraintF> = is_minting
+            .not()
+            .and(&sender_exists)?
             .and(&sender_updated_correctly)?
             .and(&recipient_exists)?
             .and(&recipient_updated_correctly)?
-            .and(&sig_verifies)
+            .and(&sig_verifies)?;
+        let good_minting_transcation: Boolean<ConstraintF> = is_minting
+            .and(&recipient_exists)?
+            .and(&recipient_updated_correctly)?;
+        sender_recipient_different.and(&good_normal_transaction.or(&good_minting_transcation)?)
     }
 }
 

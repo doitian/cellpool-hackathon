@@ -1,0 +1,284 @@
+* Show current status
+
+#+begin_src sh :results output
+  curl -sS http://localhost:5060/state | jq
+#+end_src
+
+#+RESULTS:
+#+begin_example
+{
+  "merkle_tree_root": "43c0b4e4b9c44ab78831c363c047408fbd9ff6cbbbd9db33046fdafcafd94859",
+  "num_of_accounts": 256,
+  "accounts": [
+    {
+      "id": 1,
+      "public_key": "2b12d19214076b3e62721f7dfd6a2fe73b3dbf9fb965a3868021e1235dfeda11",
+      "balance": 9223372036854776000
+    },
+    {
+      "id": 3,
+      "public_key": "6502b9fe0ff15d22b88638040af8cac3399177c2c7438184c669bddc7fa7a9be",
+      "balance": 4242
+    },
+    {
+      "id": 2,
+      "public_key": "24d00ecdb96c97df68d2cbc8e5b92d2f766f64ac209df473347e4973da62d337",
+      "balance": 10000
+    }
+  ]
+}
+#+end_example
+
+* Add transactions to the uncommitted list
+#+begin_src sh :results output
+  curl -sS -X POST http://localhost:5060/create_transaction -H "Content-Type: application/json" -d @tx1.json | jq
+#+end_src
+
+#+RESULTS:
+#+begin_example
+{
+  "transaction": {
+    "sender": "24d00ecdb96c97df68d2cbc8e5b92d2f766f64ac209df473347e4973da62d337",
+    "recipient": "6502b9fe0ff15d22b88638040af8cac3399177c2c7438184c669bddc7fa7a9be",
+    "amount": 5,
+    "fee": 0
+  },
+  "signature": {
+    "prover_response": "1430487431de422b955bf3e6f2d2a49c33256690c235238dc9e53c0f1cb9fd00",
+    "verifier_challenge": "188e8cd831f0879d7138bcf6bfa8f072047298b797b557f4c2fedfe83e657567"
+  }
+}
+#+end_example
+
+#+begin_src sh :results output
+  curl -sS -X POST http://localhost:5060/create_transaction -H "Content-Type: application/json" -d @tx2.json | jq
+#+end_src
+
+#+RESULTS:
+#+begin_example
+{
+  "transaction": {
+    "sender": "24d00ecdb96c97df68d2cbc8e5b92d2f766f64ac209df473347e4973da62d337",
+    "recipient": "6502b9fe0ff15d22b88638040af8cac3399177c2c7438184c669bddc7fa7a9be",
+    "amount": 21,
+    "fee": 0
+  },
+  "signature": {
+    "prover_response": "265f0311372994ab2c5559583e5f83e169c44a476e433625130853bae4c0e205",
+    "verifier_challenge": "6a4a1034593978faaf9d0358a55f4304414a24912d91c1f2803f5953394b14cd"
+  }
+}
+#+end_example
+
+* Show all the uncommitted transactions
+#+begin_src sh :results output
+  curl -sS http://localhost:5060/uncommitted_transactions | jq
+#+end_src
+
+#+RESULTS:
+#+begin_example
+[
+  {
+    "transaction": {
+      "sender": "24d00ecdb96c97df68d2cbc8e5b92d2f766f64ac209df473347e4973da62d337",
+      "recipient": "6502b9fe0ff15d22b88638040af8cac3399177c2c7438184c669bddc7fa7a9be",
+      "amount": 5,
+      "fee": 0
+    },
+    "signature": {
+      "prover_response": "1430487431de422b955bf3e6f2d2a49c33256690c235238dc9e53c0f1cb9fd00",
+      "verifier_challenge": "188e8cd831f0879d7138bcf6bfa8f072047298b797b557f4c2fedfe83e657567"
+    }
+  },
+  {
+    "transaction": {
+      "sender": "24d00ecdb96c97df68d2cbc8e5b92d2f766f64ac209df473347e4973da62d337",
+      "recipient": "6502b9fe0ff15d22b88638040af8cac3399177c2c7438184c669bddc7fa7a9be",
+      "amount": 21,
+      "fee": 0
+    },
+    "signature": {
+      "prover_response": "265f0311372994ab2c5559583e5f83e169c44a476e433625130853bae4c0e205",
+      "verifier_challenge": "6a4a1034593978faaf9d0358a55f4304414a24912d91c1f2803f5953394b14cd"
+    }
+  }
+]
+#+end_example
+
+* Rollup uncommitted transactions
+#+begin_src sh :results output
+  curl -sS 'http://localhost:5060/rollup?commit=true' | jq
+#+end_src
+
+#+RESULTS:
+#+begin_example
+[
+  {
+    "merkle_tree_root": "a354f92a6772ca9f6dcd35ed9c8c4a4ef0e0866e658c34bb3f818c2d6ea71839",
+    "num_of_accounts": 256,
+    "accounts": [
+      {
+        "id": 3,
+        "public_key": "6502b9fe0ff15d22b88638040af8cac3399177c2c7438184c669bddc7fa7a9be",
+        "balance": 4268
+      },
+      {
+        "id": 2,
+        "public_key": "24d00ecdb96c97df68d2cbc8e5b92d2f766f64ac209df473347e4973da62d337",
+        "balance": 9974
+      },
+      {
+        "id": 1,
+        "public_key": "2b12d19214076b3e62721f7dfd6a2fe73b3dbf9fb965a3868021e1235dfeda11",
+        "balance": 9223372036854776000
+      }
+    ]
+  },
+  {
+    "initial_root": "43c0b4e4b9c44ab78831c363c047408fbd9ff6cbbbd9db33046fdafcafd94859",
+    "final_root": "a354f92a6772ca9f6dcd35ed9c8c4a4ef0e0866e658c34bb3f818c2d6ea71839",
+    "transactions": [
+      {
+        "sender": "24d00ecdb96c97df68d2cbc8e5b92d2f766f64ac209df473347e4973da62d337",
+        "recipient": "6502b9fe0ff15d22b88638040af8cac3399177c2c7438184c669bddc7fa7a9be",
+        "amount": 5,
+        "fee": 0
+      },
+      {
+        "sender": "24d00ecdb96c97df68d2cbc8e5b92d2f766f64ac209df473347e4973da62d337",
+        "recipient": "6502b9fe0ff15d22b88638040af8cac3399177c2c7438184c669bddc7fa7a9be",
+        "amount": 21,
+        "fee": 0
+      }
+    ],
+    "signatures": [
+      {
+        "prover_response": "1430487431de422b955bf3e6f2d2a49c33256690c235238dc9e53c0f1cb9fd00",
+        "verifier_challenge": "188e8cd831f0879d7138bcf6bfa8f072047298b797b557f4c2fedfe83e657567"
+      },
+      {
+        "prover_response": "265f0311372994ab2c5559583e5f83e169c44a476e433625130853bae4c0e205",
+        "verifier_challenge": "6a4a1034593978faaf9d0358a55f4304414a24912d91c1f2803f5953394b14cd"
+      }
+    ],
+    "sender_pre_tx_info_and_paths": [
+      [
+        {
+          "id": 2,
+          "public_key": "24d00ecdb96c97df68d2cbc8e5b92d2f766f64ac209df473347e4973da62d337",
+          "balance": 10000
+        },
+        "5dd4846b80d0dfe0eb92a3470f3dd1d309051a465e2a1dde53b32c82b64d6523060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000dcf22a1f4d14c65ad89256836408951656958bec17b973517c948fdcf8e790490200000000000000"
+      ],
+      [
+        {
+          "id": 2,
+          "public_key": "24d00ecdb96c97df68d2cbc8e5b92d2f766f64ac209df473347e4973da62d337",
+          "balance": 9995
+        },
+        "aef9ab697f8374685b412fcab41b7c5f0f24e72a584310b4e8279292aed8041d060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000dcf22a1f4d14c65ad89256836408951656958bec17b973517c948fdcf8e790490200000000000000"
+      ]
+    ],
+    "sender_post_paths": [
+      "aef9ab697f8374685b412fcab41b7c5f0f24e72a584310b4e8279292aed8041d060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000dcf22a1f4d14c65ad89256836408951656958bec17b973517c948fdcf8e790490200000000000000",
+      "8d0849ace05f5cc2fc169b73848e8554bdb3ced7073c6a8644330c0ec0822759060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000dcf22a1f4d14c65ad89256836408951656958bec17b973517c948fdcf8e790490200000000000000"
+    ],
+    "recv_pre_tx_info_and_paths": [
+      [
+        {
+          "id": 3,
+          "public_key": "6502b9fe0ff15d22b88638040af8cac3399177c2c7438184c669bddc7fa7a9be",
+          "balance": 4242
+        },
+        "d6896f3acf631c55b403cceb36dfcd929fc19fc8a4ae6e5a4763937c2b4a3e02060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000dcf22a1f4d14c65ad89256836408951656958bec17b973517c948fdcf8e790490300000000000000"
+      ],
+      [
+        {
+          "id": 3,
+          "public_key": "6502b9fe0ff15d22b88638040af8cac3399177c2c7438184c669bddc7fa7a9be",
+          "balance": 4247
+        },
+        "31a1c3d08c8cf17b3c5af5824c06dfb493afc013c2a16458be10a3f65598ba02060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000dcf22a1f4d14c65ad89256836408951656958bec17b973517c948fdcf8e790490300000000000000"
+      ]
+    ],
+    "recv_post_paths": [
+      "31a1c3d08c8cf17b3c5af5824c06dfb493afc013c2a16458be10a3f65598ba02060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000dcf22a1f4d14c65ad89256836408951656958bec17b973517c948fdcf8e790490300000000000000",
+      "4494d5b9073446df73b67e6067acec5d135d1094aa5e2871825168655d84be5f060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000dcf22a1f4d14c65ad89256836408951656958bec17b973517c948fdcf8e790490300000000000000"
+    ],
+    "post_tx_roots": [
+      "ec8f89bd83911a45cb3db981868552f537f8106ce74d84c2fe974d4501924b66",
+      "a354f92a6772ca9f6dcd35ed9c8c4a4ef0e0866e658c34bb3f818c2d6ea71839"
+    ]
+  }
+]
+#+end_example
+
+* Generate a proof from the rollup
+#+begin_src sh :results output
+  curl -sS -X POST http://localhost:5060/generate_proof_from_rollup -H "Content-Type: application/json" -d @rollup.json | jq
+#+end_src
+
+#+RESULTS:
+#+begin_example
+{
+  "proof": {
+    "proof": "FOcSEwDNhyASMVNl7MgzyLyRlrXGLXP2PHwRHmjSFdC4THNE0DA1FkoNyV4yj2QXaz0N1o3Zh+LzmwVipC5zT/1HVGfGlG6UCMvatdlofrDjz/y+oY/cmhYUpRw1dhoQzydTl2MjKF4NV7rj8M95FcAUoJ3DFOMrkqRLMCZFTcx4wiiW8dDaDIVNnBMJ6akASQjyvos2z2a97oLpDl8LMONphBpy3drISl9GipyJT+US2FoHSqH1n8k2ZUcntTqR",
+    "vk": "FVFefoG/vHtjLWHEkp55YGpnPufYT+/kes6bUy8fcLhPGVbW/zNgGLlZdgdDqVEC7BkSMaNioR0IEY4xtHuGGCWJg5ekCzxCKo3X/uKdHpr9WcsB8jbD9uSZ3Hu9h0UVMhaLKoSomkxHaavZGG5B/1QaASOYaERQGh4p2YmVerw++IsGEefjoDx8dXYryJiKDM/pQY0xKk8JzOve7mnUrk+BkBbh3oDRikyJznhZSwsR+gvju4d4w1EsTRATvPoKaZ3joeOChegBXtjnNQNPeSRmC/udp7U5cosdNtM6s22kPLE+reuHG/xGEhU3jcKN4a0Kz72o1fXyHP27FAOktJnD0WJ6TZGCvLdmkRHHQGv2YZAC9Fl3QcHA54uPaMYDRan/LwdQBTLVXy4Mk8A4BPrcveHcaOj7lnb3V4COKSBLkcKYwrEPrQJQc/Iur8CZBQAAAAAAAABqjuh3SUu3n80QNSFTj7zZg3AAuAObsC7KX90tQ2XPZE5Xx4zzN31ciYthOpD3Ipgmn67xxt0354y8N2a280lPI+3S3u5sOStFSiCncpNTI1RV9VZoujUVSMuTsTrE2xUdGKTfoB1p0Lc0BpN7hmm3ftJxz2jfvKX+Xxt9xlpUw4DwB01TYtPHalGxWV2pKgNAU4HVeIKE62KFNDToOohnkjcfE9HsePyVyq+peo/zhCNIuh2p9gzFvh8CuYL5AQbsZB/pRaa6xK2Mub8jiC/j4TD4po8pe7y3gHngwawcIgavkPQ30lTeXNlD9zN0Ahg="
+  },
+  "initial_root": "43c0b4e4b9c44ab78831c363c047408fbd9ff6cbbbd9db33046fdafcafd94859",
+  "final_root": "a354f92a6772ca9f6dcd35ed9c8c4a4ef0e0866e658c34bb3f818c2d6ea71839",
+  "transactions_hash": "5080bbe2dc1d3feefe8e95794670cf593ed19dae172f1242338eec18b4ac6c18",
+  "transactions": [
+    {
+      "sender": "24d00ecdb96c97df68d2cbc8e5b92d2f766f64ac209df473347e4973da62d337",
+      "recipient": "6502b9fe0ff15d22b88638040af8cac3399177c2c7438184c669bddc7fa7a9be",
+      "amount": 5,
+      "fee": 0
+    },
+    {
+      "sender": "24d00ecdb96c97df68d2cbc8e5b92d2f766f64ac209df473347e4973da62d337",
+      "recipient": "6502b9fe0ff15d22b88638040af8cac3399177c2c7438184c669bddc7fa7a9be",
+      "amount": 21,
+      "fee": 0
+    }
+  ]
+}
+#+end_example
+
+* Verify the proof generated
+#+begin_src sh :results output
+  curl -sS -X POST http://localhost:5060/verify_proof -H "Content-Type: application/json" -d @proof_result.json
+#+end_src
+
+#+RESULTS:
+: true
+
+* Show the new state
+#+begin_src sh :results output
+  curl -sS http://localhost:5060/state | jq
+#+end_src
+
+#+RESULTS:
+#+begin_example
+{
+  "merkle_tree_root": "a354f92a6772ca9f6dcd35ed9c8c4a4ef0e0866e658c34bb3f818c2d6ea71839",
+  "num_of_accounts": 256,
+  "accounts": [
+    {
+      "id": 3,
+      "public_key": "6502b9fe0ff15d22b88638040af8cac3399177c2c7438184c669bddc7fa7a9be",
+      "balance": 4268
+    },
+    {
+      "id": 2,
+      "public_key": "24d00ecdb96c97df68d2cbc8e5b92d2f766f64ac209df473347e4973da62d337",
+      "balance": 9974
+    },
+    {
+      "id": 1,
+      "public_key": "2b12d19214076b3e62721f7dfd6a2fe73b3dbf9fb965a3868021e1235dfeda11",
+      "balance": 9223372036854776000
+    }
+  ]
+}
+#+end_example

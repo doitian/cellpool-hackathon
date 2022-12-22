@@ -12,6 +12,8 @@ pub mod rollup;
 
 pub mod proofs;
 
+pub mod serde;
+
 pub use account::{AccountId, AccountInformation, AccountPublicKey, AccountSecretKey};
 pub use ledger::{AccMerkleTree, AccPath, AccRoot, Amount, State};
 pub use proofs::*;

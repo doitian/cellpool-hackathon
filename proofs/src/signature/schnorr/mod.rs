@@ -1,4 +1,6 @@
 use super::SignatureScheme;
+use crate::serde::SerdeAsHex;
+
 use ark_crypto_primitives::Error;
 use ark_ec::{AffineCurve, ProjectiveCurve};
 use ark_ff::{
@@ -6,6 +8,7 @@ use ark_ff::{
     fields::{Field, PrimeField},
     to_bytes, ToConstraintField, UniformRand,
 };
+use ark_serialize::*;
 use ark_std::io::{Result as IoResult, Write};
 use ark_std::rand::Rng;
 use ark_std::{hash::Hash, marker::PhantomData, vec::Vec};
@@ -13,6 +16,9 @@ use blake2::Blake2s;
 use digest::Digest;
 
 use derivative::Derivative;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
+
 #[cfg(feature = "r1cs")]
 pub mod constraints;
 
@@ -21,7 +27,7 @@ pub struct Schnorr<C: ProjectiveCurve> {
 }
 
 #[derive(Derivative)]
-#[derivative(Clone(bound = "C: ProjectiveCurve"), Debug)]
+#[derivative(Clone(bound = "C: ProjectiveCurve"), Debug, Default)]
 pub struct Parameters<C: ProjectiveCurve> {
     pub generator: C::Affine,
     pub salt: Option<[u8; 32]>,
@@ -42,15 +48,22 @@ impl<C: ProjectiveCurve> ToBytes for SecretKey<C> {
     }
 }
 
-#[derive(Clone, Default, Debug)]
-pub struct Signature<C: ProjectiveCurve> {
+#[serde_as]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+pub struct Signature<C>
+where
+    C: ProjectiveCurve,
+    C::ScalarField: CanonicalSerialize + CanonicalDeserialize,
+{
+    #[serde_as(as = "SerdeAsHex")]
     pub prover_response: C::ScalarField,
+    #[serde_as(as = "serde_with::hex::Hex")]
     pub verifier_challenge: [u8; 32],
 }
 
 impl<C: ProjectiveCurve + Hash> SignatureScheme for Schnorr<C>
 where
-    C::ScalarField: PrimeField,
+    C::ScalarField: PrimeField + CanonicalSerialize + CanonicalDeserialize,
 {
     type Parameters = Parameters<C>;
     type PublicKey = PublicKey<C>;
