@@ -2,7 +2,10 @@
 
 Folder structure
 
-- `cellpool/`: CKB contract
+- `coordinator`: demo app to integrate everything together.
+- `contracts/cellpool/`: CKB contract.
+- `proofs`: offline tool to generate proof.
+
 
 ## Contract
 
